@@ -57,22 +57,13 @@ public class Main {
       public void run() {
           try {
               BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-              System.out.println("INPUTsss => " + reader.readLine());
-              Parser parser = new Parser(reader);
-              RESPObject value = parser.parse();
-              if (value instanceof RESPArray) {
-                  String argument = new CommandExecutor().execute((RESPArray) value, db);
-                  socket.getOutputStream().write(argument.getBytes());
-                  socket.getOutputStream().flush();
-              }
-              String input;
-              while (reader.ready()) {
-                  System.out.println("INPUT => " + reader.readLine());
-              }
-              while ((input = reader.readLine()) != null) {
-//                  System.out.println("INPUT => " + input);
-                  if (input.startsWith("PING")) {
-                      socket.getOutputStream().write("+PONG\r\n".getBytes());
+              while (true) {
+                  Parser parser = new Parser(reader);
+                  RESPObject value = parser.parse();
+                  if (value instanceof RESPArray) {
+                      String argument = new CommandExecutor().execute((RESPArray) value, db);
+                      socket.getOutputStream().write(argument.getBytes());
+                      socket.getOutputStream().flush();
                   }
               }
           } catch (IOException e) {

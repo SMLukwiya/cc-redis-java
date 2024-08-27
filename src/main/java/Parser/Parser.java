@@ -12,6 +12,7 @@ public class Parser {
     private final BufferedReader reader;
 
     public Parser(BufferedReader reader) {
+        System.out.println("Input => ");
         this.reader = reader;
     }
 

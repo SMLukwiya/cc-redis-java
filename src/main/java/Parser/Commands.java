@@ -2,5 +2,7 @@ package Parser;
 
 public enum Commands {
     PING,
-    ECHO
+    ECHO,
+    SET,
+    GET
 }

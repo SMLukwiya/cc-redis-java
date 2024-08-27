@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -15,6 +17,7 @@ public class Main {
   public static void main(String[] args){
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     System.out.println("Logs from your program will appear here!");
+    Map<String, Object> db = new HashMap<>();
 
     //  Uncomment this block to pass the first stage
         ServerSocket serverSocket = null;
@@ -29,68 +32,45 @@ public class Main {
           // ensures that we don't run into 'Address already in use' errors
           serverSocket.setReuseAddress(true);
 
-//          new NetworkService(port, 4);
-
           try {
             for (;;) {
                 clientSocket = serverSocket.accept();
-                pool.execute(new MultiResponse(clientSocket));
-                System.out.println("POOL => " + pool.isShutdown());
+                pool.execute(new MultiResponse(clientSocket, db));
             }
           } catch (IOException ex) {
               System.out.println(("IOException => " + ex.getMessage()));
           }
-//            while (true) {
-//                clientSocket = serverSocket.accept();
-//                Socket finalClientSocket = clientSocket;
-//                new Thread(new MultiResponse(clientSocket)).start();
-//            }
         } catch (IOException e) {
           System.out.println("IOException: " + e.getMessage());
         }
   }
 
-  static class NetworkService implements Runnable {
-      private final ServerSocket serverSocket;
-      private final ExecutorService pool;
-
-      public NetworkService(int port, int poolSize)
-        throws IOException {
-          serverSocket = new ServerSocket(port);
-          pool = Executors.newFixedThreadPool(poolSize);
-      }
-
-      public void run() { // run the service
-          try {
-              for (;;) {
-                  System.out.println("RUnning");
-                  pool.execute(new MultiResponse(serverSocket.accept()));
-              }
-          } catch (IOException ex) {
-              pool.shutdown();
-          }
-      }
-  }
-
   static class MultiResponse implements Runnable {
       private final Socket socket;
+      Map<String, Object> db;
 
-      public MultiResponse(Socket socket) {
+      public MultiResponse(Socket socket, Map<String, Object> db) {
           this.socket = socket;
+          this.db = db;
       }
 
       public void run() {
           try {
               BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+              System.out.println("INPUTsss => " + reader.readLine());
               Parser parser = new Parser(reader);
               RESPObject value = parser.parse();
               if (value instanceof RESPArray) {
-                  String argument = new CommandExecutor().execute((RESPArray) value);
+                  String argument = new CommandExecutor().execute((RESPArray) value, db);
                   socket.getOutputStream().write(argument.getBytes());
                   socket.getOutputStream().flush();
               }
               String input;
+              while (reader.ready()) {
+                  System.out.println("INPUT => " + reader.readLine());
+              }
               while ((input = reader.readLine()) != null) {
+//                  System.out.println("INPUT => " + input);
                   if (input.startsWith("PING")) {
                       socket.getOutputStream().write("+PONG\r\n".getBytes());
                   }

@@ -1,3 +1,8 @@
+import Parser.Parser;
+import Parser.RESTObjects.RESPArray;
+import Parser.RESTObjects.RESPObject;
+import Parser.CommandExecutor;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -24,17 +29,51 @@ public class Main {
           // ensures that we don't run into 'Address already in use' errors
           serverSocket.setReuseAddress(true);
 
+//          new NetworkService(port, 4);
+
+          try {
             for (;;) {
                 clientSocket = serverSocket.accept();
                 pool.execute(new MultiResponse(clientSocket));
+                System.out.println("POOL => " + pool.isShutdown());
             }
+          } catch (IOException ex) {
+              System.out.println(("IOException => " + ex.getMessage()));
+          }
+//            while (true) {
+//                clientSocket = serverSocket.accept();
+//                Socket finalClientSocket = clientSocket;
+//                new Thread(new MultiResponse(clientSocket)).start();
+//            }
         } catch (IOException e) {
           System.out.println("IOException: " + e.getMessage());
         }
   }
 
+  static class NetworkService implements Runnable {
+      private final ServerSocket serverSocket;
+      private final ExecutorService pool;
+
+      public NetworkService(int port, int poolSize)
+        throws IOException {
+          serverSocket = new ServerSocket(port);
+          pool = Executors.newFixedThreadPool(poolSize);
+      }
+
+      public void run() { // run the service
+          try {
+              for (;;) {
+                  System.out.println("RUnning");
+                  pool.execute(new MultiResponse(serverSocket.accept()));
+              }
+          } catch (IOException ex) {
+              pool.shutdown();
+          }
+      }
+  }
+
   static class MultiResponse implements Runnable {
-      Socket socket;
+      private final Socket socket;
 
       public MultiResponse(Socket socket) {
           this.socket = socket;
@@ -43,6 +82,13 @@ public class Main {
       public void run() {
           try {
               BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+              Parser parser = new Parser(reader);
+              RESPObject value = parser.parse();
+              if (value instanceof RESPArray) {
+                  String argument = new CommandExecutor().execute((RESPArray) value);
+                  socket.getOutputStream().write(argument.getBytes());
+                  socket.getOutputStream().flush();
+              }
               String input;
               while ((input = reader.readLine()) != null) {
                   if (input.startsWith("PING")) {

@@ -2,6 +2,7 @@ import Parser.Parser;
 import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPObject;
 import Parser.CommandExecutor;
+import Parser.RESTObjects.RespValue;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -13,11 +14,12 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+
 public class Main {
   public static void main(String[] args){
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     System.out.println("Logs from your program will appear here!");
-    Map<String, Object> db = new HashMap<>();
+    Map<String, RespValue> db = new HashMap<>();
 
     //  Uncomment this block to pass the first stage
         ServerSocket serverSocket = null;
@@ -47,9 +49,9 @@ public class Main {
 
   static class MultiResponse implements Runnable {
       private final Socket socket;
-      Map<String, Object> db;
+      Map<String, RespValue> db;
 
-      public MultiResponse(Socket socket, Map<String, Object> db) {
+      public MultiResponse(Socket socket, Map<String, RespValue> db) {
           this.socket = socket;
           this.db = db;
       }

@@ -9,10 +9,9 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class CommandExecutor {
-    public String execute(RESPArray command, Map<String, RespValue> db) {
+    public String execute(RESPArray command, Map<String, RespValue> db, Map<String, String> config) {
         RESPObject[] items = command.getValues();
         if (items.length == 0) {
             return "-Err Empty command\r\n";
@@ -31,6 +30,8 @@ public class CommandExecutor {
                 return executeSetCommand(items, db);
             case Commands.GET:
                 return executeGetCommand(items, db);
+            case Commands.CONFIG:
+                return executeConfigGetCommand(items, config);
             default:
                 return "-ERR Unknown command\r\n";
         }
@@ -72,5 +73,30 @@ public class CommandExecutor {
         System.out.println("EXPIRY => " + value.expiry() + " => " + new Date().getTime());
         boolean hasExpired = value.expiry() < new Date().getTime();
         return (value == null || hasExpired) ? "$-1\r\n" : "$" + value.value().toString().length() + "\r\n" + value.value().toString() + "\r\n";
+    }
+
+    private String executeConfigGetCommand(RESPObject[] items, Map<String, String> config) {
+        if (items.length < 3) {
+            return "-Err invalid number of parameters for 'config get' command";
+        }
+        List<String> itemValues = extractItemValuesFromRespObjects(items);
+        String key = itemValues.get(2);
+        System.out.println(itemValues.get(0) + " => " + itemValues.get(1) + " => " + key);
+
+        if (key.equals("dir")) {
+            String dir = config.get("dir");
+            return "*2\r\n$3\r\ndir\r\n$" + dir.length() + "\r\n" + dir + "\r\n";
+        }
+
+        if (key.equals("dbfilename")) {
+            String dbFileName = config.get("dbfilename");
+            return "*2\r\n$10\r\ndbfilename\r\n$" + dbFileName.length() + "\r\n" + dbFileName + "\r\n";
+        }
+
+        return "$-1\r\n";
+    }
+
+    private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {
+        return Arrays.stream(items).map(i -> ((RESPBulkString) i).getValue()).toList();
     }
 }

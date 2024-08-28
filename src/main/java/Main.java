@@ -20,6 +20,22 @@ public class Main {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     System.out.println("Logs from your program will appear here!");
     Map<String, RespValue> db = new HashMap<>();
+    Map<String, String> config = new HashMap<>();
+
+    for (int i = 0; i < args.length; i++) {
+        switch(args[i]) {
+            case "--dir":
+                if (i+1 < args.length) {
+                    config.put("dir", args[i+1]);
+                }
+                break;
+            case "--dbfilename":
+                if (i+1 < args.length) {
+                    config.put("dbfilename", args[i+1]);
+                }
+                break;
+        }
+    }
 
     //  Uncomment this block to pass the first stage
         ServerSocket serverSocket = null;
@@ -37,7 +53,7 @@ public class Main {
           try {
             for (;;) {
                 clientSocket = serverSocket.accept();
-                pool.execute(new MultiResponse(clientSocket, db));
+                pool.execute(new MultiResponse(clientSocket, db, config));
             }
           } catch (IOException ex) {
               System.out.println(("IOException => " + ex.getMessage()));
@@ -50,10 +66,12 @@ public class Main {
   static class MultiResponse implements Runnable {
       private final Socket socket;
       Map<String, RespValue> db;
+      Map<String, String> config;
 
-      public MultiResponse(Socket socket, Map<String, RespValue> db) {
+      public MultiResponse(Socket socket, Map<String, RespValue> db, Map<String, String> config) {
           this.socket = socket;
           this.db = db;
+          this.config = config;
       }
 
       public void run() {
@@ -63,7 +81,7 @@ public class Main {
                   Parser parser = new Parser(reader);
                   RESPObject value = parser.parse();
                   if (value instanceof RESPArray) {
-                      String argument = new CommandExecutor().execute((RESPArray) value, db);
+                      String argument = new CommandExecutor().execute((RESPArray) value, db, config);
                       socket.getOutputStream().write(argument.getBytes());
                       socket.getOutputStream().flush();
                   }

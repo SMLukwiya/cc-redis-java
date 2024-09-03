@@ -9,9 +9,7 @@ import RdbParser.KeyValuePair;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -20,7 +18,7 @@ public class Main {
   public static void main(String[] args){
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     System.out.println("Logs from your program will appear here!");
-    Map<String, RespValue> db = new HashMap<>();
+    ArrayList<KeyValuePair> db = new ArrayList<>();
     Map<String, String> config = new HashMap<>();
 
     for (int i = 0; i < args.length; i++) {
@@ -47,13 +45,12 @@ public class Main {
         try {
             String rdbFilePath = config.get("dir") + "/" + config.get("dbfilename");
             File f = new File(rdbFilePath);
-            List<KeyValuePair> data = null;
 
             if (f.exists()) {
                 DataInputStream dataStream = new DataInputStream(new FileInputStream(rdbFilePath));
 
                 RdbParser rdbParser = new RdbParser(dataStream);
-                data = rdbParser.parse();
+                db = rdbParser.parse();
                 dataStream.close();
             }
 
@@ -66,7 +63,7 @@ public class Main {
           try {
             for (;;) {
                 clientSocket = serverSocket.accept();
-                pool.execute(new MultiResponse(clientSocket, data, db, config));
+                pool.execute(new MultiResponse(clientSocket, db, config));
             }
           } catch (IOException ex) {
               System.out.println(("IOException => " + ex.getMessage()));
@@ -79,13 +76,11 @@ public class Main {
   static class MultiResponse implements Runnable {
       private final Socket socket;
 
-      private final List<KeyValuePair> rdbData;
-      Map<String, RespValue> db;
+      private final ArrayList<KeyValuePair> db;
       Map<String, String> config;
 
-      public MultiResponse(Socket socket, List<KeyValuePair> rdbData, Map<String, RespValue> db, Map<String, String> config) {
+      public MultiResponse(Socket socket, ArrayList<KeyValuePair> db, Map<String, String> config) {
           this.socket = socket;
-          this.rdbData = rdbData;
           this.db = db;
           this.config = config;
       }
@@ -97,7 +92,7 @@ public class Main {
                   Parser parser = new Parser(reader);
                   RESPObject value = parser.parse();
                   if (value instanceof RESPArray) {
-                      String argument = new CommandExecutor().execute((RESPArray) value, db, config, rdbData);
+                      String argument = new CommandExecutor().execute((RESPArray) value, db, config);
                       socket.getOutputStream().write(argument.getBytes());
                       socket.getOutputStream().flush();
                   }

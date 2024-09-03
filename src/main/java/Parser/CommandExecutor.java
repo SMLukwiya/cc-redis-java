@@ -3,17 +3,13 @@ package Parser;
 import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPBulkString;
 import Parser.RESTObjects.RESPObject;
-import Parser.RESTObjects.RespValue;
 import RdbParser.KeyValuePair;
 
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.sql.Timestamp;
+import java.util.*;
 
 public class CommandExecutor {
-    public String execute(RESPArray command, Map<String, RespValue> db, Map<String, String> config, List<KeyValuePair> data) {
+    public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config) {
         RESPObject[] items = command.getValues();
         if (items.length == 0) {
             return "-Err Empty command\r\n";
@@ -35,13 +31,13 @@ public class CommandExecutor {
             case Commands.CONFIG:
                 return executeConfigGetCommand(items, config);
             case Commands.KEYS:
-                return executeKeysCommand(items, data);
+                return executeKeysCommand(items, db);
             default:
                 return "-ERR Unknown command\r\n";
         }
     }
 
-    private String executeSetCommand(RESPObject[] items, Map<String, RespValue> db) {
+    private String executeSetCommand(RESPObject[] items, ArrayList<KeyValuePair> db) {
         if (items.length < 3) {
             return "-Err incorrect number of arguments for 'set' command\r\n";
         }
@@ -56,26 +52,34 @@ public class CommandExecutor {
 
         String key = itemValues.get(1);
         String value = itemValues.get(2);
-        long expiryValue;
-        if (items.length > 3) {
-            expiryValue = new Date().getTime() + Long.parseLong(itemValues.get(4));
-        } else {
-            expiryValue = new Date().getTime() + 100000;
-        }
 
-        db.put(key, new RespValue(value, expiryValue));
+        KeyValuePair entry = new KeyValuePair();
+        entry.setValue(value);
+        entry.setKey(key);
+
+        if (items.length > 3) {
+            long expiryValue = new Date().getTime() + Long.parseLong(itemValues.get(4));
+            entry.setExpiryTime(new Timestamp(expiryValue));
+        }
+        System.out.println("Entry => " + entry.getKey() + entry.getValue() + entry.getExpiryTime());
+        db.add(entry);
+
         return "+OK\r\n";
     }
 
-    private String executeGetCommand(RESPObject[] items, Map<String, RespValue> db) {
+    private String executeGetCommand(RESPObject[] items, List<KeyValuePair> db) {
         if (items.length < 2) {
             return "-Err incorrect number of arguments for 'get' command\r\n";
         }
 
         String key = ((RESPBulkString) items[1]).getValue();
-        RespValue value = db.get(key);
-        boolean hasExpired = value.expiry() < new Date().getTime();
-        return (value == null || hasExpired) ? "$-1\r\n" : "$" + value.value().toString().length() + "\r\n" + value.value().toString() + "\r\n";
+        KeyValuePair entry = db.stream().filter(item -> item.getKey().equals(key)).toList().get(0);
+        boolean hasExpired = false;
+
+        if (entry.getExpiryTime() != null) {
+            hasExpired = entry.getExpiryTime().getTime() < new Date().getTime();
+        }
+        return (entry == null || hasExpired) ? "$-1\r\n" : "$" + entry.getValue().toString().length() + "\r\n" + entry.getValue() + "\r\n";
     }
 
     private String executeConfigGetCommand(RESPObject[] items, Map<String, String> config) {

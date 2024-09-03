@@ -36,7 +36,7 @@ public class RdbParser {
     private static final int RDB_ENC_BIT32 = 2;
 
     private DataInputStream inputStream;
-    private List<KeyValuePair> keyValuePairs = new ArrayList<>();
+    private ArrayList<KeyValuePair> keyValuePairs = new ArrayList<>();
     private KeyValuePair nextEntry;
 
     public RdbParser(DataInputStream inputStream) {
@@ -82,7 +82,7 @@ public class RdbParser {
         }
     }
 
-    public List<KeyValuePair> parse() throws IOException {
+    public ArrayList<KeyValuePair> parse() throws IOException {
         parseHeader();
         nextEntry = new KeyValuePair();
 

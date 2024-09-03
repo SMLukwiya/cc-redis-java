@@ -3,13 +3,14 @@ import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPObject;
 import Parser.CommandExecutor;
 import Parser.RESTObjects.RespValue;
+import RdbParser.RdbParser;
+import RdbParser.KeyValuePair;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,6 +45,18 @@ public class Main {
         final ExecutorService pool;
 
         try {
+            String rdbFilePath = config.get("dir") + "/" + config.get("dbfilename");
+            File f = new File(rdbFilePath);
+            List<KeyValuePair> data = null;
+
+            if (f.exists()) {
+                DataInputStream dataStream = new DataInputStream(new FileInputStream(rdbFilePath));
+
+                RdbParser rdbParser = new RdbParser(dataStream);
+                data = rdbParser.parse();
+                dataStream.close();
+            }
+
           serverSocket = new ServerSocket(port);
           pool = Executors.newFixedThreadPool(4);
           // Since the tester restarts your program quite often, setting SO_REUSEADDR
@@ -53,7 +66,7 @@ public class Main {
           try {
             for (;;) {
                 clientSocket = serverSocket.accept();
-                pool.execute(new MultiResponse(clientSocket, db, config));
+                pool.execute(new MultiResponse(clientSocket, data, db, config));
             }
           } catch (IOException ex) {
               System.out.println(("IOException => " + ex.getMessage()));
@@ -65,11 +78,14 @@ public class Main {
 
   static class MultiResponse implements Runnable {
       private final Socket socket;
+
+      private final List<KeyValuePair> rdbData;
       Map<String, RespValue> db;
       Map<String, String> config;
 
-      public MultiResponse(Socket socket, Map<String, RespValue> db, Map<String, String> config) {
+      public MultiResponse(Socket socket, List<KeyValuePair> rdbData, Map<String, RespValue> db, Map<String, String> config) {
           this.socket = socket;
+          this.rdbData = rdbData;
           this.db = db;
           this.config = config;
       }
@@ -81,7 +97,7 @@ public class Main {
                   Parser parser = new Parser(reader);
                   RESPObject value = parser.parse();
                   if (value instanceof RESPArray) {
-                      String argument = new CommandExecutor().execute((RESPArray) value, db, config);
+                      String argument = new CommandExecutor().execute((RESPArray) value, db, config, rdbData);
                       socket.getOutputStream().write(argument.getBytes());
                       socket.getOutputStream().flush();
                   }

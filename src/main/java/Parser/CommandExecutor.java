@@ -4,14 +4,16 @@ import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPBulkString;
 import Parser.RESTObjects.RESPObject;
 import Parser.RESTObjects.RespValue;
+import RdbParser.KeyValuePair;
 
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class CommandExecutor {
-    public String execute(RESPArray command, Map<String, RespValue> db, Map<String, String> config) {
+    public String execute(RESPArray command, Map<String, RespValue> db, Map<String, String> config, List<KeyValuePair> data) {
         RESPObject[] items = command.getValues();
         if (items.length == 0) {
             return "-Err Empty command\r\n";
@@ -32,6 +34,8 @@ public class CommandExecutor {
                 return executeGetCommand(items, db);
             case Commands.CONFIG:
                 return executeConfigGetCommand(items, config);
+            case Commands.KEYS:
+                return executeKeysCommand(items, data);
             default:
                 return "-ERR Unknown command\r\n";
         }
@@ -70,7 +74,6 @@ public class CommandExecutor {
 
         String key = ((RESPBulkString) items[1]).getValue();
         RespValue value = db.get(key);
-        System.out.println("EXPIRY => " + value.expiry() + " => " + new Date().getTime());
         boolean hasExpired = value.expiry() < new Date().getTime();
         return (value == null || hasExpired) ? "$-1\r\n" : "$" + value.value().toString().length() + "\r\n" + value.value().toString() + "\r\n";
     }
@@ -81,7 +84,6 @@ public class CommandExecutor {
         }
         List<String> itemValues = extractItemValuesFromRespObjects(items);
         String key = itemValues.get(2);
-        System.out.println(itemValues.get(0) + " => " + itemValues.get(1) + " => " + key);
 
         if (key.equals("dir")) {
             String dir = config.get("dir");
@@ -98,5 +100,24 @@ public class CommandExecutor {
 
     private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {
         return Arrays.stream(items).map(i -> ((RESPBulkString) i).getValue()).toList();
+    }
+
+    private String executeKeysCommand(RESPObject[] items, List<KeyValuePair> data) {
+        if (items.length < 2) {
+            return "-Err Invalid number of parameters for 'keys' command";
+        }
+        String keyName = ((RESPBulkString) items[1]).getValue();
+        List<String> keys = data.stream().map(KeyValuePair::getKey).toList();
+
+        if (keyName.equals("*")) {
+            StringBuilder result = new StringBuilder("*" + keys.size() + "\r\n");
+            for (String k : keys) {
+                result.append("$").append(k.length()).append("\r\n").append(k).append("\r\n");
+            }
+            return result.toString();
+        } else {
+            List<String> res = keys.stream().filter(i -> i.equals(keyName)).toList();
+            return res.get(0);
+        }
     }
 }

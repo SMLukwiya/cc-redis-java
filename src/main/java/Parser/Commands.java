@@ -5,5 +5,6 @@ public enum Commands {
     ECHO,
     SET,
     GET,
-    CONFIG
+    CONFIG,
+    KEYS
 }

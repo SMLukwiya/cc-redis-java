@@ -56,6 +56,7 @@ public class Parser {
         RESPObject[] items = new RESPObject[length];
         for (int i = 0; i < length; i++) {
             items[i] = parse();
+            System.out.println();
         }
         return new RESPArray(items);
     }

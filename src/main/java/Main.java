@@ -33,13 +33,17 @@ public class Main {
                     config.put("dbfilename", args[i+1]);
                 }
                 break;
+            case "--port":
+                if (i+1 < args.length) {
+                    config.put("port", args[i+1]);
+                }
         }
     }
 
     //  Uncomment this block to pass the first stage
         ServerSocket serverSocket = null;
         Socket clientSocket = null;
-        int port = 6379;
+        int port = config.get("port") != null ? Integer.parseInt(config.get("port")) : 6379;
         final ExecutorService pool;
 
         try {

@@ -33,7 +33,7 @@ public class CommandExecutor {
             case Commands.KEYS:
                 return executeKeysCommand(items, db);
             case Commands.INFO:
-                return executeInfoCommand(items);
+                return executeInfoCommand(items, config);
             default:
                 return "-ERR Unknown command\r\n";
         }
@@ -120,7 +120,7 @@ public class CommandExecutor {
         }
     }
 
-    private String executeInfoCommand(RESPObject[] items) {
+    private String executeInfoCommand(RESPObject[] items, Map<String, String> config) {
         List<String> itemValues = extractItemValuesFromRespObjects(items);
         String infoArgument = "";
         if (itemValues.size() > 1) {
@@ -128,7 +128,11 @@ public class CommandExecutor {
         }
 
         return switch (infoArgument) {
-            case "REPLICATION" -> "$11\r\nrole:master\r\n";
+            case "REPLICATION" -> {
+                boolean isSlave = config.containsKey("masterHost");
+                String role = isSlave ? "role:slave" : "role:master";
+                yield "$" + role.length() + "\r\n" + role + "\r\n";
+            }
             default -> "Not reached";
         };
     }

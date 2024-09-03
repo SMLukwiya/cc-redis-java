@@ -33,8 +33,23 @@ public class Main {
                 }
                 break;
             case "--port":
+            case "-p":
                 if (i+1 < args.length) {
                     config.put("port", args[i+1]);
+                }
+                break;
+            case "--replicaof":
+                String replicaInfo;
+                if (i+1 < args.length) {
+                    replicaInfo = args[i+1];
+                    String[] masterInfo = replicaInfo.split(" ");
+                    if (masterInfo.length > 2) {
+                        String masterHost = masterInfo[0];
+                        String masterPort = masterInfo[1];
+                        config.put("masterHost", masterHost);
+                        config.put("masterPort", masterPort);
+
+                    }
                 }
         }
     }

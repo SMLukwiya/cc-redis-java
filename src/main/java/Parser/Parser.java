@@ -18,22 +18,17 @@ public class Parser {
     public RESPObject parse() throws IOException {
         int prefix = reader.read();
         if (prefix == -1) {
-            throw new IOException("End of stream");
+            return null;
         }
 
         DataType type = DataType.getTypeFromPrefix((char) prefix);
 
-        switch (type) {
-            case SIMPLE_STRING:
-                return new RESPSimpleString(reader.readLine());
-            case BULK_STRING:
-                return parseBulkString();
-            case ARRAY:
-            case PUSHES:
-                return parseArray();
-            default:
-                throw new IOException("Unknown RESP data type: " + (char) prefix);
-        }
+        return switch (type) {
+            case SIMPLE_STRING -> new RESPSimpleString(reader.readLine());
+            case BULK_STRING -> parseBulkString();
+            case ARRAY, PUSHES -> parseArray();
+            default -> throw new IOException("Unknown RESP data type: " + (char) prefix);
+        };
     }
 
     private RESPBulkString parseBulkString() throws IOException {

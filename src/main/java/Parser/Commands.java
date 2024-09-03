@@ -6,5 +6,6 @@ public enum Commands {
     SET,
     GET,
     CONFIG,
-    KEYS
+    KEYS,
+    INFO
 }

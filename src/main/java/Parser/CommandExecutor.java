@@ -32,6 +32,8 @@ public class CommandExecutor {
                 return executeConfigGetCommand(items, config);
             case Commands.KEYS:
                 return executeKeysCommand(items, db);
+            case Commands.INFO:
+                return executeInfoCommand(items);
             default:
                 return "-ERR Unknown command\r\n";
         }
@@ -46,9 +48,7 @@ public class CommandExecutor {
             return "-Err incorrect number of arguments for ;'set' command\r\n";
         }
 
-        List<String> itemValues = Arrays.stream(items)
-          .map(respObject -> ((RESPBulkString) respObject).getValue())
-          .toList();
+        List<String> itemValues = extractItemValuesFromRespObjects(items);
 
         String key = itemValues.get(1);
         String value = itemValues.get(2);
@@ -61,7 +61,6 @@ public class CommandExecutor {
             long expiryValue = new Date().getTime() + Long.parseLong(itemValues.get(4));
             entry.setExpiryTime(new Timestamp(expiryValue));
         }
-        System.out.println("Entry => " + entry.getKey() + entry.getValue() + entry.getExpiryTime());
         db.add(entry);
 
         return "+OK\r\n";
@@ -102,10 +101,6 @@ public class CommandExecutor {
         return "$-1\r\n";
     }
 
-    private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {
-        return Arrays.stream(items).map(i -> ((RESPBulkString) i).getValue()).toList();
-    }
-
     private String executeKeysCommand(RESPObject[] items, List<KeyValuePair> data) {
         if (items.length < 2) {
             return "-Err Invalid number of parameters for 'keys' command";
@@ -123,5 +118,22 @@ public class CommandExecutor {
             List<String> res = keys.stream().filter(i -> i.equals(keyName)).toList();
             return res.get(0);
         }
+    }
+
+    private String executeInfoCommand(RESPObject[] items) {
+        List<String> itemValues = extractItemValuesFromRespObjects(items);
+        String infoArgument = "";
+        if (itemValues.size() > 1) {
+            infoArgument = itemValues.get(1).toUpperCase();
+        }
+
+        return switch (infoArgument) {
+            case "REPLICATION" -> "$11\r\nrole:master\r\n";
+            default -> "Not reached";
+        };
+    }
+
+    private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {
+        return Arrays.stream(items).map(i -> ((RESPBulkString) i).getValue()).toList();
     }
 }

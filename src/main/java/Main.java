@@ -109,6 +109,7 @@ public class Main {
                   RESPObject value = parser.parse();
                   if (value instanceof RESPArray) {
                       String argument = new CommandExecutor().execute((RESPArray) value, db, config);
+                      System.out.println("Argument => " + argument);
                       socket.getOutputStream().write(argument.getBytes());
                       socket.getOutputStream().flush();
                   }

@@ -130,8 +130,11 @@ public class CommandExecutor {
         return switch (infoArgument) {
             case "REPLICATION" -> {
                 boolean isSlave = config.containsKey("masterHost");
-                String role = isSlave ? "role:slave" : "role:master";
-                yield "$" + role.length() + "\r\n" + role + "\r\n";
+                String type = isSlave ? "role:slave" : "role:master";
+                String masterReplid = "master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb";
+                String masterReplOffset = "master_repl_offset:0";
+                String res = masterReplOffset + masterReplid + type;
+                yield "$" + res.length() + "\r\n" + res + "\r\n";
             }
             default -> "Not reached";
         };

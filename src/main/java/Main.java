@@ -47,6 +47,7 @@ public class Main {
                         String masterPort = masterInfo[1];
                         config.put("masterHost", masterHost);
                         config.put("masterPort", masterPort);
+                        config.put("isSlave", "true");
                     }
                 }
         }
@@ -75,6 +76,13 @@ public class Main {
           // Since the tester restarts your program quite often, setting SO_REUSEADDR
           // ensures that we don't run into 'Address already in use' errors
           serverSocket.setReuseAddress(true);
+
+            if (Boolean.parseBoolean(config.get("isSlave"))) {
+                Socket slave = new Socket(config.get("masterHost"), Integer.parseInt(config.get("masterPort")));
+                slave.getOutputStream().write("*1\r\n$4\r\nPING\r\n".getBytes());
+                slave.getOutputStream().flush();
+                slave.close();
+            }
 
           try {
             for (;;) {
@@ -109,7 +117,6 @@ public class Main {
                   RESPObject value = parser.parse();
                   if (value instanceof RESPArray) {
                       String argument = new CommandExecutor().execute((RESPArray) value, db, config);
-                      System.out.println("Argument => " + argument);
                       socket.getOutputStream().write(argument.getBytes());
                       socket.getOutputStream().flush();
                   }

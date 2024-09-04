@@ -8,5 +8,6 @@ public enum Commands {
     CONFIG,
     KEYS,
     INFO,
-    REPLCONF
+    REPLCONF,
+    PSYNC
 }

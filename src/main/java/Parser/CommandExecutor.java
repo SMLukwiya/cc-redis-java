@@ -36,6 +36,8 @@ public class CommandExecutor {
                 return executeInfoCommand(items, config);
             case Commands.REPLCONF:
                 return "+OK\r\n";
+            case Commands.PSYNC:
+                return executePsyncCommand(items, config);
             default:
                 return "-ERR Unknown command\r\n";
         }
@@ -140,6 +142,17 @@ public class CommandExecutor {
             }
             default -> "Not reached";
         };
+    }
+
+    private String executePsyncCommand(RESPObject[] items, Map<String, String> config) {
+        if (items.length < 3) {
+            return "-Err Invalid number of arguments for 'psync' command";
+        }
+        List<String> itemValues = extractItemValuesFromRespObjects(items);
+        String replID = itemValues.get(1);
+        String offset = itemValues.get(2);
+
+        return "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n";
     }
 
     private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {

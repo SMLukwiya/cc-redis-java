@@ -124,10 +124,14 @@ public class Main {
               while (true) {
                   Parser parser = new Parser(reader);
                   RESPObject value = parser.parse();
+                  OutputStream outputStream = socket.getOutputStream();
                   if (value instanceof RESPArray) {
-                      String argument = new CommandExecutor().execute((RESPArray) value, db, config);
-                      socket.getOutputStream().write(argument.getBytes());
-                      socket.getOutputStream().flush();
+                      String argument = new CommandExecutor().execute((RESPArray) value, db, config, outputStream);
+                      if (argument == null) {
+                          return;
+                      }
+                      outputStream.write(argument.getBytes());
+                      outputStream.flush();
                   }
               }
           } catch (IOException e) {

@@ -5,11 +5,13 @@ import Parser.RESTObjects.RESPBulkString;
 import Parser.RESTObjects.RESPObject;
 import RdbParser.KeyValuePair;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.sql.Timestamp;
 import java.util.*;
 
 public class CommandExecutor {
-    public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config) {
+    public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config, OutputStream os) throws IOException {
         RESPObject[] items = command.getValues();
         if (items.length == 0) {
             return "-Err Empty command\r\n";
@@ -37,7 +39,7 @@ public class CommandExecutor {
             case Commands.REPLCONF:
                 return "+OK\r\n";
             case Commands.PSYNC:
-                return executePsyncCommand(items, config);
+                return executePsyncCommand(items, config, os);
             default:
                 return "-ERR Unknown command\r\n";
         }
@@ -144,7 +146,7 @@ public class CommandExecutor {
         };
     }
 
-    private String executePsyncCommand(RESPObject[] items, Map<String, String> config) {
+    private String executePsyncCommand(RESPObject[] items, Map<String, String> config, OutputStream os) throws IOException {
         if (items.length < 3) {
             return "-Err Invalid number of arguments for 'psync' command";
         }
@@ -152,10 +154,27 @@ public class CommandExecutor {
         String replID = itemValues.get(1);
         String offset = itemValues.get(2);
 
-        return "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n";
+        os.write("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n".getBytes());
+        String emptyFileContent = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==";
+        byte[] bytes = Base64.getDecoder().decode(emptyFileContent);
+        os.write(("$" + bytes.length + "\r\n").getBytes());
+        os.write(bytes);
+        return null;
     }
 
     private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {
         return Arrays.stream(items).map(i -> ((RESPBulkString) i).getValue()).toList();
+    }
+
+    // utils
+    private String base64ToBinary(String base64String) {
+        StringBuilder result = new StringBuilder();
+        byte[] bytes = Base64.getDecoder().decode(base64String);
+
+        for (byte b : bytes) {
+            String binary = String.format("%8s", Integer.toBinaryString(b & 0xff).replace(' ', '0'));
+            result.append(binary);
+        }
+        return result.toString();
     }
 }

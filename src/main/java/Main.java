@@ -81,14 +81,16 @@ public class Main {
                 Socket slave = new Socket(config.get("masterHost"), Integer.parseInt(config.get("masterPort")));
                 OutputStream outputStream = slave.getOutputStream();
                 InputStream inputStream = slave.getInputStream();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
 
                 outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
-                inputStream.read();
+                reader.readLine();
                 outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n".getBytes());
-                inputStream.read();
+                reader.readLine();
                 outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n".getBytes());
+                reader.readLine();
+                outputStream.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n".getBytes());
                 outputStream.flush();
-                slave.close();
             }
 
           try {

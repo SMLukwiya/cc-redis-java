@@ -9,8 +9,10 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 
 
 public class Main {
@@ -19,6 +21,7 @@ public class Main {
     System.out.println("Logs from your program will appear here!");
     ArrayList<KeyValuePair> db = new ArrayList<>();
     Map<String, String> config = new HashMap<>();
+    BlockingQueue<String> commandQueue = new LinkedBlockingQueue<>();
 
     for (int i = 0; i < args.length; i++) {
         switch(args[i]) {
@@ -96,7 +99,7 @@ public class Main {
           try {
             for (;;) {
                 clientSocket = serverSocket.accept();
-                pool.execute(new MultiResponse(clientSocket, db, config));
+                pool.execute(new MultiResponse(clientSocket, db, config, commandQueue));
             }
           } catch (IOException ex) {
               System.out.println(("IOException => " + ex.getMessage()));
@@ -108,14 +111,15 @@ public class Main {
 
   static class MultiResponse implements Runnable {
       private final Socket socket;
-
       private final ArrayList<KeyValuePair> db;
       Map<String, String> config;
+      BlockingQueue<String> commandQueue;
 
-      public MultiResponse(Socket socket, ArrayList<KeyValuePair> db, Map<String, String> config) {
+      public MultiResponse(Socket socket, ArrayList<KeyValuePair> db, Map<String, String> config, BlockingQueue<String> commandQueue) {
           this.socket = socket;
           this.db = db;
           this.config = config;
+          this.commandQueue = commandQueue;
       }
 
       public void run() {
@@ -126,7 +130,7 @@ public class Main {
                   RESPObject value = parser.parse();
                   OutputStream outputStream = socket.getOutputStream();
                   if (value instanceof RESPArray) {
-                      String argument = new CommandExecutor().execute((RESPArray) value, db, config, outputStream);
+                      String argument = new CommandExecutor().execute((RESPArray) value, db, config, outputStream, commandQueue);
                       if (argument == null) {
                           return;
                       }
@@ -136,6 +140,9 @@ public class Main {
               }
           } catch (IOException e) {
               System.out.println("IOException: " + e.getMessage());
+          } catch (InterruptedException e) {
+              System.out.println("Interrupted: " + e.getMessage());
+              throw new RuntimeException(e);
           } finally {
               try {
                 if (socket != null) {

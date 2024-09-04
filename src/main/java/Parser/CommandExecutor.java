@@ -9,9 +9,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.sql.Timestamp;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
 
 public class CommandExecutor {
-    public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config, OutputStream os) throws IOException {
+    public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config, OutputStream os, BlockingQueue<String> commandQueue) throws IOException, InterruptedException {
         RESPObject[] items = command.getValues();
         if (items.length == 0) {
             return "-Err Empty command\r\n";
@@ -27,7 +28,7 @@ public class CommandExecutor {
                 RESPBulkString ArgName = (RESPBulkString) items[1];
                 return ArgName.toString();
             case Commands.SET:
-                return executeSetCommand(items, db);
+                return executeSetCommand(items, db, os, commandQueue);
             case Commands.GET:
                 return executeGetCommand(items, db);
             case Commands.CONFIG:
@@ -39,13 +40,13 @@ public class CommandExecutor {
             case Commands.REPLCONF:
                 return "+OK\r\n";
             case Commands.PSYNC:
-                return executePsyncCommand(items, config, os);
+                return executePsyncCommand(items, config, os, commandQueue);
             default:
                 return "-ERR Unknown command\r\n";
         }
     }
 
-    private String executeSetCommand(RESPObject[] items, ArrayList<KeyValuePair> db) {
+    private String executeSetCommand(RESPObject[] items, ArrayList<KeyValuePair> db, OutputStream os, BlockingQueue<String> queue) throws IOException {
         if (items.length < 3) {
             return "-Err incorrect number of arguments for 'set' command\r\n";
         }
@@ -68,7 +69,13 @@ public class CommandExecutor {
             entry.setExpiryTime(new Timestamp(expiryValue));
         }
         db.add(entry);
+        StringBuilder replicateCommand = new StringBuilder();
+        replicateCommand.append("*").append(itemValues.size()).append("\r\n");
+        for (String c : itemValues) {
+            replicateCommand.append("$").append(c.length()).append("\r\n").append(c).append("\r\n");
+        }
 
+        queue.add(replicateCommand.toString());
         return "+OK\r\n";
     }
 
@@ -146,7 +153,7 @@ public class CommandExecutor {
         };
     }
 
-    private String executePsyncCommand(RESPObject[] items, Map<String, String> config, OutputStream os) throws IOException {
+    private String executePsyncCommand(RESPObject[] items, Map<String, String> config, OutputStream os, BlockingQueue<String> queue) throws IOException, InterruptedException {
         if (items.length < 3) {
             return "-Err Invalid number of arguments for 'psync' command";
         }
@@ -155,11 +162,16 @@ public class CommandExecutor {
         String offset = itemValues.get(2);
 
         os.write("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n".getBytes());
-        String emptyFileContent = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==";
-        byte[] bytes = Base64.getDecoder().decode(emptyFileContent);
+        String emptyRDBFileContent = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==";
+        byte[] bytes = Base64.getDecoder().decode(emptyRDBFileContent);
         os.write(("$" + bytes.length + "\r\n").getBytes());
         os.write(bytes);
-        return null;
+        //
+        while (true) {
+            String command = queue.take();
+            os.write(command.getBytes());
+        }
+//        return null;
     }
 
     private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {

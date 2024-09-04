@@ -34,6 +34,8 @@ public class CommandExecutor {
                 return executeKeysCommand(items, db);
             case Commands.INFO:
                 return executeInfoCommand(items, config);
+            case Commands.REPLCONF:
+                return "+OK\r\n";
             default:
                 return "-ERR Unknown command\r\n";
         }

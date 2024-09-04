@@ -7,5 +7,6 @@ public enum Commands {
     GET,
     CONFIG,
     KEYS,
-    INFO
+    INFO,
+    REPLCONF
 }

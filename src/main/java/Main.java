@@ -76,11 +76,18 @@ public class Main {
           // Since the tester restarts your program quite often, setting SO_REUSEADDR
           // ensures that we don't run into 'Address already in use' errors
           serverSocket.setReuseAddress(true);
-
-            if (Boolean.parseBoolean(config.get("isSlave"))) {
+          boolean isSlave = Boolean.parseBoolean(config.get("isSlave"));
+            if (isSlave) {
                 Socket slave = new Socket(config.get("masterHost"), Integer.parseInt(config.get("masterPort")));
-                slave.getOutputStream().write("*1\r\n$4\r\nPING\r\n".getBytes());
-                slave.getOutputStream().flush();
+                OutputStream outputStream = slave.getOutputStream();
+                InputStream inputStream = slave.getInputStream();
+
+                outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
+                inputStream.read();
+                outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n".getBytes());
+                inputStream.read();
+                outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n".getBytes());
+                outputStream.flush();
                 slave.close();
             }
 

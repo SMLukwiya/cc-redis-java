@@ -42,7 +42,8 @@ public class Main {
           serverSocket.setReuseAddress(true);
           boolean isSlave = Boolean.parseBoolean(config.get("isSlave"));
           if (isSlave) {
-              new SlaveConnection(config, db).initiate();
+              Socket socket = new Socket(config.get("masterHost"), Integer.parseInt(config.get("masterPort")));
+              pool.execute(new SlaveConnection(socket, config, db));
           }
 
           while (true) {

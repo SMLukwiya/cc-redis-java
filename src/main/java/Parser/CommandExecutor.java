@@ -93,15 +93,16 @@ public class CommandExecutor {
             replicateCommand.append("$").append(c.length()).append("\r\n").append(c).append("\r\n");
         }
 
-        replicas.getReplicas().forEach(outputStream -> {
-            try {
-                outputStream.write(replicateCommand.toString().getBytes());
-                outputStream.flush();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
-
+        if (replicas != null) {
+            replicas.getReplicas().forEach(outputStream -> {
+                try {
+                    outputStream.write(replicateCommand.toString().getBytes());
+                    outputStream.flush();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
         return "+OK\r\n";
     }
 

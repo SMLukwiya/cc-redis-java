@@ -4,7 +4,8 @@ import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPBulkString;
 import Parser.RESTObjects.RESPObject;
 import RdbParser.KeyValuePair;
-import replicas.Replicas;
+import store.Cache;
+import store.Replicas;
 
 import java.io.IOException;
 import java.sql.Timestamp;
@@ -12,7 +13,33 @@ import java.util.*;
 
 public class CommandExecutor {
 
-    public String executeReplica(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config) throws IOException {
+//    public String executeReplica(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config) throws IOException {
+//        RESPObject[] items = command.getValues();
+//        if (items.length == 0) {
+//            return "-Err Empty command\r\n";
+//        }
+//
+//        RESPBulkString commandName = (RESPBulkString) items[0];
+//        String commandString = commandName.getValue().toUpperCase();
+//
+//        return switch (Commands.valueOf(commandString)) {
+//            case Commands.PING -> "+PONG\r\n";
+//            case Commands.ECHO -> {
+//                RESPBulkString ArgName = (RESPBulkString) items[1];
+//                yield ArgName.toString();
+//            }
+//            case Commands.SET -> executeSetCommandReplica(items, db);
+//            case Commands.GET -> executeGetCommand(items, db);
+//            case Commands.CONFIG -> executeConfigGetCommand(items, config);
+//            case Commands.KEYS -> executeKeysCommand(items, db);
+//            case Commands.INFO -> executeInfoCommand(items, config);
+//            case Commands.REPLCONF -> executeReplConfCommand(items);
+//            case Commands.PSYNC -> executePsyncCommand(items, config);
+//            default -> "-ERR Unknown command\r\n";
+//        };
+//    }
+
+    public String execute(RESPArray command, Cache cache, Map<String, String> config, Replicas replicas) throws IOException {
         RESPObject[] items = command.getValues();
         if (items.length == 0) {
             return "-Err Empty command\r\n";
@@ -20,6 +47,7 @@ public class CommandExecutor {
 
         RESPBulkString commandName = (RESPBulkString) items[0];
         String commandString = commandName.getValue().toUpperCase();
+        ArrayList<KeyValuePair> db = cache.getCache();
 
         return switch (Commands.valueOf(commandString)) {
             case Commands.PING -> "+PONG\r\n";
@@ -27,44 +55,18 @@ public class CommandExecutor {
                 RESPBulkString ArgName = (RESPBulkString) items[1];
                 yield ArgName.toString();
             }
-            case Commands.SET -> executeSetCommandReplica(items, db);
-            case Commands.GET -> executeGetCommand(items, db);
+            case Commands.SET -> executeSetCommand(items, cache, replicas);
+            case Commands.GET -> executeGetCommand(items, cache);
             case Commands.CONFIG -> executeConfigGetCommand(items, config);
             case Commands.KEYS -> executeKeysCommand(items, db);
             case Commands.INFO -> executeInfoCommand(items, config);
-            case Commands.REPLCONF -> "+OK\r\n";
+            case Commands.REPLCONF -> executeReplConfCommand(items);
             case Commands.PSYNC -> executePsyncCommand(items, config);
             default -> "-ERR Unknown command\r\n";
         };
     }
 
-    public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config, Replicas replicas) throws IOException {
-        RESPObject[] items = command.getValues();
-        if (items.length == 0) {
-            return "-Err Empty command\r\n";
-        }
-
-        RESPBulkString commandName = (RESPBulkString) items[0];
-        String commandString = commandName.getValue().toUpperCase();
-
-        return switch (Commands.valueOf(commandString)) {
-            case Commands.PING -> "+PONG\r\n";
-            case Commands.ECHO -> {
-                RESPBulkString ArgName = (RESPBulkString) items[1];
-                yield ArgName.toString();
-            }
-            case Commands.SET -> executeSetCommand(items, db, replicas);
-            case Commands.GET -> executeGetCommand(items, db);
-            case Commands.CONFIG -> executeConfigGetCommand(items, config);
-            case Commands.KEYS -> executeKeysCommand(items, db);
-            case Commands.INFO -> executeInfoCommand(items, config);
-            case Commands.REPLCONF -> "+OK\r\n";
-            case Commands.PSYNC -> executePsyncCommand(items, config);
-            default -> "-ERR Unknown command\r\n";
-        };
-    }
-
-    private String executeSetCommand(RESPObject[] items, ArrayList<KeyValuePair> db, Replicas replicas) throws IOException {
+    private String executeSetCommand(RESPObject[] items, Cache cache, Replicas replicas) throws IOException {
         if (items.length < 3) {
             return "-Err incorrect number of arguments for 'set' command\r\n";
         }
@@ -86,59 +88,31 @@ public class CommandExecutor {
             long expiryValue = new Date().getTime() + Long.parseLong(itemValues.get(4));
             entry.setExpiryTime(new Timestamp(expiryValue));
         }
-        db.add(entry);
+        cache.setCache(entry);
         StringBuilder replicateCommand = new StringBuilder();
         replicateCommand.append("*").append(itemValues.size()).append("\r\n");
         for (String c : itemValues) {
             replicateCommand.append("$").append(c.length()).append("\r\n").append(c).append("\r\n");
         }
 
-        if (replicas != null) {
-            replicas.getReplicas().forEach(outputStream -> {
-                try {
-                    outputStream.write(replicateCommand.toString().getBytes());
-                    outputStream.flush();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-        }
+        replicas.getReplicas().forEach(outputStream -> {
+            try {
+                outputStream.write(replicateCommand.toString().getBytes());
+                outputStream.flush();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
         return "+OK\r\n";
     }
 
-    private String executeSetCommandReplica(RESPObject[] items, ArrayList<KeyValuePair> db) throws IOException {
-        if (items.length < 3) {
-            return "-Err incorrect number of arguments for 'set' command\r\n";
-        }
-        boolean hasExtraProps = items.length > 3;
-        if (hasExtraProps && items.length - 3 < 2) {
-            return "-Err incorrect number of arguments for ;'set' command\r\n";
-        }
-
-        List<String> itemValues = extractItemValuesFromRespObjects(items);
-
-        String key = itemValues.get(1);
-        String value = itemValues.get(2);
-
-        KeyValuePair entry = new KeyValuePair();
-        entry.setValue(value);
-        entry.setKey(key);
-
-        if (items.length > 3) {
-            long expiryValue = new Date().getTime() + Long.parseLong(itemValues.get(4));
-            entry.setExpiryTime(new Timestamp(expiryValue));
-        }
-        db.add(entry);
-        return "+OK\r\n";
-    }
-
-    private String executeGetCommand(RESPObject[] items, List<KeyValuePair> db) {
+    private String executeGetCommand(RESPObject[] items, Cache cache) {
         if (items.length < 2) {
             return "-Err incorrect number of arguments for 'get' command\r\n";
         }
 
         String key = ((RESPBulkString) items[1]).getValue();
-        KeyValuePair entry = db.stream().filter(item -> item.getKey().equals(key)).toList().get(0);
+        KeyValuePair entry = cache.getCache().stream().filter(item -> item.getKey().equals(key)).toList().get(0);
         boolean hasExpired = false;
 
         if (entry.getExpiryTime() != null) {
@@ -217,19 +191,23 @@ public class CommandExecutor {
         return "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n";
     }
 
-    private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {
-        return Arrays.stream(items).map(i -> ((RESPBulkString) i).getValue()).toList();
+    private String executeReplConfCommand(RESPObject[] items) {
+        if (items.length < 3) {
+            return "-Err Invalid number of commands for 'replconf command'";
+        }
+
+        List<String> commands = extractItemValuesFromRespObjects(items);
+        String commandArgument = commands.get(1);
+
+        return switch (commandArgument) {
+            case "listening-port", "capa" -> "+OK\r\n";
+            case "GETACK" -> "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n";
+            default -> "";
+        };
     }
 
-    // utils
-    private String base64ToBinary(String base64String) {
-        StringBuilder result = new StringBuilder();
-        byte[] bytes = Base64.getDecoder().decode(base64String);
 
-        for (byte b : bytes) {
-            String binary = String.format("%8s", Integer.toBinaryString(b & 0xff).replace(' ', '0'));
-            result.append(binary);
-        }
-        return result.toString();
+    private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {
+        return Arrays.stream(items).map(i -> ((RESPBulkString) i).getValue()).toList();
     }
 }

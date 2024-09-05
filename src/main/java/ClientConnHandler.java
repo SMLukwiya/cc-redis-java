@@ -2,26 +2,25 @@ import Parser.Parser;
 import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPObject;
 import Parser.CommandExecutor;
-import RdbParser.KeyValuePair;
-import replicas.Replicas;
+import store.Cache;
+import store.Replicas;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Map;
 
 public class ClientConnHandler implements Runnable {
     private static String emptyRDBFileContent = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==";
     private final Socket socket;
-    private final ArrayList<KeyValuePair> db;
+    Cache db;
     Map<String, String> config;
     Replicas replicas;
 
-    public ClientConnHandler(Socket socket, ArrayList<KeyValuePair> db, Map<String, String> config, Replicas replicas) {
+    public ClientConnHandler(Socket socket, Cache db, Map<String, String> config, Replicas replicas) {
         this.socket = socket;
         this.db = db;
         this.config = config;

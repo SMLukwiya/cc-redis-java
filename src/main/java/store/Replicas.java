@@ -1,4 +1,4 @@
-package replicas;
+package store;
 
 import java.io.OutputStream;
 import java.util.HashSet;

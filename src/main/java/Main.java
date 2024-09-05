@@ -1,6 +1,7 @@
 import RdbParser.RdbParser;
 import RdbParser.KeyValuePair;
-import replicas.Replicas;
+import store.Cache;
+import store.Replicas;
 import utils.Utils;
 
 import java.io.*;
@@ -13,7 +14,7 @@ import java.util.concurrent.Executors;
 public class Main {
   public static void main(String[] args){
       System.out.println("Logs from your program will appear here!");
-      ArrayList<KeyValuePair> db = new ArrayList<>();
+      Cache db = new Cache();
       Map<String, String> config = new HashMap<>();
       Replicas replicas = new Replicas();
 
@@ -31,7 +32,8 @@ public class Main {
               DataInputStream dataStream = new DataInputStream(new FileInputStream(rdbFilePath));
 
               RdbParser rdbParser = new RdbParser(dataStream);
-              db = rdbParser.parse();
+              ArrayList<KeyValuePair> data =  rdbParser.parse();
+              db = new Cache(data);
               dataStream.close();
           }
 
@@ -43,7 +45,7 @@ public class Main {
           boolean isSlave = Boolean.parseBoolean(config.get("isSlave"));
           if (isSlave) {
               Socket socket = new Socket(config.get("masterHost"), Integer.parseInt(config.get("masterPort")));
-              pool.execute(new SlaveConnection(socket, config, db));
+              pool.execute(new SlaveConnection(socket, config, db, replicas));
           }
 
           while (true) {

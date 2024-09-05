@@ -2,22 +2,24 @@ import Parser.Parser;
 import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPObject;
 import Parser.CommandExecutor;
-import RdbParser.KeyValuePair;
+import store.Cache;
+import store.Replicas;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.Map;
 
 public class SlaveConnection implements Runnable {
     Socket slave;
     Map<String, String> config;
-    ArrayList<KeyValuePair> db;
+    Cache db;
+    Replicas replicas;
 
-    public SlaveConnection(Socket socket, Map<String, String> config, ArrayList<KeyValuePair> db) {
+    public SlaveConnection(Socket socket, Map<String, String> config, Cache db, Replicas replicas) {
         this.slave = socket;
         this.config = config;
         this.db = db;
+        this.replicas = replicas;
     }
 
     public void run() {
@@ -42,7 +44,10 @@ public class SlaveConnection implements Runnable {
                 if (value == null) {
                     break;
                 }
-                new CommandExecutor().executeReplica((RESPArray) value, db, config);
+                String response = new CommandExecutor().execute((RESPArray) value, db, config, replicas);
+                if (response.contains("ACK")) {
+                    outputStream.write(response.getBytes());
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

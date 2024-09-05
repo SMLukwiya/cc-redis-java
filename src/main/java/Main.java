@@ -1,78 +1,39 @@
-import Parser.Parser;
-import Parser.RESTObjects.RESPArray;
-import Parser.RESTObjects.RESPObject;
-import Parser.CommandExecutor;
 import RdbParser.RdbParser;
 import RdbParser.KeyValuePair;
+import replicas.Replicas;
+import utils.Utils;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-
 
 public class Main {
   public static void main(String[] args){
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    System.out.println("Logs from your program will appear here!");
-    ArrayList<KeyValuePair> db = new ArrayList<>();
-    Map<String, String> config = new HashMap<>();
-    BlockingQueue<String> commandQueue = new LinkedBlockingQueue<>();
+      System.out.println("Logs from your program will appear here!");
+      ArrayList<KeyValuePair> db = new ArrayList<>();
+      Map<String, String> config = new HashMap<>();
+      Replicas replicas = new Replicas();
 
-    for (int i = 0; i < args.length; i++) {
-        switch(args[i]) {
-            case "--dir":
-                if (i+1 < args.length) {
-                    config.put("dir", args[i+1]);
-                }
-                break;
-            case "--dbfilename":
-                if (i+1 < args.length) {
-                    config.put("dbfilename", args[i+1]);
-                }
-                break;
-            case "--port":
-            case "-p":
-                if (i+1 < args.length) {
-                    config.put("port", args[i+1]);
-                }
-                break;
-            case "--replicaof":
-                if (i+1 < args.length) {
-                    String replicaInfo = args[i+1];
-                    String[] masterInfo = replicaInfo.split(" ");
-                    if (masterInfo.length > 1) {
-                        String masterHost = masterInfo[0];
-                        String masterPort = masterInfo[1];
-                        config.put("masterHost", masterHost);
-                        config.put("masterPort", masterPort);
-                        config.put("isSlave", "true");
-                    }
-                }
-        }
-    }
+      ServerSocket serverSocket = null;
+      Socket clientSocket = null;
+      config = new Utils().setConfig(args, config);
+      int port = config.get("port") != null ? Integer.parseInt(config.get("port")) : 6379;
+      final ExecutorService pool;
 
-    //  Uncomment this block to pass the first stage
-        ServerSocket serverSocket = null;
-        Socket clientSocket = null;
-        int port = config.get("port") != null ? Integer.parseInt(config.get("port")) : 6379;
-        final ExecutorService pool;
+      try {
+          String rdbFilePath = config.get("dir") + "/" + config.get("dbfilename");
+          File f = new File(rdbFilePath);
 
-        try {
-            String rdbFilePath = config.get("dir") + "/" + config.get("dbfilename");
-            File f = new File(rdbFilePath);
+          if (f.exists()) {
+              DataInputStream dataStream = new DataInputStream(new FileInputStream(rdbFilePath));
 
-            if (f.exists()) {
-                DataInputStream dataStream = new DataInputStream(new FileInputStream(rdbFilePath));
-
-                RdbParser rdbParser = new RdbParser(dataStream);
-                db = rdbParser.parse();
-                dataStream.close();
-            }
+              RdbParser rdbParser = new RdbParser(dataStream);
+              db = rdbParser.parse();
+              dataStream.close();
+          }
 
           serverSocket = new ServerSocket(port);
           pool = Executors.newFixedThreadPool(4);
@@ -80,78 +41,16 @@ public class Main {
           // ensures that we don't run into 'Address already in use' errors
           serverSocket.setReuseAddress(true);
           boolean isSlave = Boolean.parseBoolean(config.get("isSlave"));
-            if (isSlave) {
-                Socket slave = new Socket(config.get("masterHost"), Integer.parseInt(config.get("masterPort")));
-                OutputStream outputStream = slave.getOutputStream();
-                InputStream inputStream = slave.getInputStream();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-
-                outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
-                reader.readLine();
-                outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n".getBytes());
-                reader.readLine();
-                outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n".getBytes());
-                reader.readLine();
-                outputStream.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n".getBytes());
-                outputStream.flush();
-            }
-
-          try {
-            for (;;) {
-                clientSocket = serverSocket.accept();
-                pool.execute(new MultiResponse(clientSocket, db, config, commandQueue));
-            }
-          } catch (IOException ex) {
-              System.out.println(("IOException => " + ex.getMessage()));
+          if (isSlave) {
+              new SlaveConnection(config).initiate();
           }
-        } catch (IOException e) {
+
+          while (true) {
+              clientSocket = serverSocket.accept();
+              pool.execute(new ClientConnHandler(clientSocket, db, config, replicas));
+          }
+      } catch (IOException e) {
           System.out.println("IOException: " + e.getMessage());
-        }
-  }
-
-  static class MultiResponse implements Runnable {
-      private final Socket socket;
-      private final ArrayList<KeyValuePair> db;
-      Map<String, String> config;
-      BlockingQueue<String> commandQueue;
-
-      public MultiResponse(Socket socket, ArrayList<KeyValuePair> db, Map<String, String> config, BlockingQueue<String> commandQueue) {
-          this.socket = socket;
-          this.db = db;
-          this.config = config;
-          this.commandQueue = commandQueue;
-      }
-
-      public void run() {
-          try {
-              BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-              while (true) {
-                  Parser parser = new Parser(reader);
-                  RESPObject value = parser.parse();
-                  OutputStream outputStream = socket.getOutputStream();
-                  if (value instanceof RESPArray) {
-                      String argument = new CommandExecutor().execute((RESPArray) value, db, config, outputStream, commandQueue);
-                      if (argument == null) {
-                          return;
-                      }
-                      outputStream.write(argument.getBytes());
-                      outputStream.flush();
-                  }
-              }
-          } catch (IOException e) {
-              System.out.println("IOException: " + e.getMessage());
-          } catch (InterruptedException e) {
-              System.out.println("Interrupted: " + e.getMessage());
-              throw new RuntimeException(e);
-          } finally {
-              try {
-                if (socket != null) {
-                    socket.close();
-                }
-              } catch (IOException e) {
-                  System.out.println("IOException: " + e.getMessage());
-              }
-          }
       }
   }
 }

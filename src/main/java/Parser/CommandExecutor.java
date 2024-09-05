@@ -4,15 +4,15 @@ import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPBulkString;
 import Parser.RESTObjects.RESPObject;
 import RdbParser.KeyValuePair;
+import replicas.Replicas;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 
 public class CommandExecutor {
-    public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config, OutputStream os, BlockingQueue<String> commandQueue) throws IOException, InterruptedException {
+
+    public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config, Replicas replicas) throws IOException {
         RESPObject[] items = command.getValues();
         if (items.length == 0) {
             return "-Err Empty command\r\n";
@@ -21,32 +21,24 @@ public class CommandExecutor {
         RESPBulkString commandName = (RESPBulkString) items[0];
         String commandString = commandName.getValue().toUpperCase();
 
-        switch (Commands.valueOf(commandString)) {
-            case Commands.PING:
-                return "+PONG\r\n";
-            case Commands.ECHO:
+        return switch (Commands.valueOf(commandString)) {
+            case Commands.PING -> "+PONG\r\n";
+            case Commands.ECHO -> {
                 RESPBulkString ArgName = (RESPBulkString) items[1];
-                return ArgName.toString();
-            case Commands.SET:
-                return executeSetCommand(items, db, os, commandQueue);
-            case Commands.GET:
-                return executeGetCommand(items, db);
-            case Commands.CONFIG:
-                return executeConfigGetCommand(items, config);
-            case Commands.KEYS:
-                return executeKeysCommand(items, db);
-            case Commands.INFO:
-                return executeInfoCommand(items, config);
-            case Commands.REPLCONF:
-                return "+OK\r\n";
-            case Commands.PSYNC:
-                return executePsyncCommand(items, config, os, commandQueue);
-            default:
-                return "-ERR Unknown command\r\n";
-        }
+                yield ArgName.toString();
+            }
+            case Commands.SET -> executeSetCommand(items, db, replicas);
+            case Commands.GET -> executeGetCommand(items, db);
+            case Commands.CONFIG -> executeConfigGetCommand(items, config);
+            case Commands.KEYS -> executeKeysCommand(items, db);
+            case Commands.INFO -> executeInfoCommand(items, config);
+            case Commands.REPLCONF -> "+OK\r\n";
+            case Commands.PSYNC -> executePsyncCommand(items, config);
+            default -> "-ERR Unknown command\r\n";
+        };
     }
 
-    private String executeSetCommand(RESPObject[] items, ArrayList<KeyValuePair> db, OutputStream os, BlockingQueue<String> queue) throws IOException {
+    private String executeSetCommand(RESPObject[] items, ArrayList<KeyValuePair> db, Replicas replicas) throws IOException {
         if (items.length < 3) {
             return "-Err incorrect number of arguments for 'set' command\r\n";
         }
@@ -75,7 +67,15 @@ public class CommandExecutor {
             replicateCommand.append("$").append(c.length()).append("\r\n").append(c).append("\r\n");
         }
 
-        queue.add(replicateCommand.toString());
+        replicas.getReplicas().forEach(outputStream -> {
+            try {
+                outputStream.write(replicateCommand.toString().getBytes());
+                outputStream.flush();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
         return "+OK\r\n";
     }
 
@@ -153,7 +153,7 @@ public class CommandExecutor {
         };
     }
 
-    private String executePsyncCommand(RESPObject[] items, Map<String, String> config, OutputStream os, BlockingQueue<String> queue) throws IOException, InterruptedException {
+    private String executePsyncCommand(RESPObject[] items, Map<String, String> config) throws IOException {
         if (items.length < 3) {
             return "-Err Invalid number of arguments for 'psync' command";
         }
@@ -161,17 +161,7 @@ public class CommandExecutor {
         String replID = itemValues.get(1);
         String offset = itemValues.get(2);
 
-        os.write("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n".getBytes());
-        String emptyRDBFileContent = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==";
-        byte[] bytes = Base64.getDecoder().decode(emptyRDBFileContent);
-        os.write(("$" + bytes.length + "\r\n").getBytes());
-        os.write(bytes);
-        //
-        while (true) {
-            String command = queue.take();
-            os.write(command.getBytes());
-        }
-//        return null;
+        return "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n";
     }
 
     private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {

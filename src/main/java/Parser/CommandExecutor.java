@@ -12,6 +12,32 @@ import java.util.*;
 
 public class CommandExecutor {
 
+    public String executeReplica(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config) throws IOException {
+        RESPObject[] items = command.getValues();
+        if (items.length == 0) {
+            return "-Err Empty command\r\n";
+        }
+
+        RESPBulkString commandName = (RESPBulkString) items[0];
+        String commandString = commandName.getValue().toUpperCase();
+
+        return switch (Commands.valueOf(commandString)) {
+            case Commands.PING -> "+PONG\r\n";
+            case Commands.ECHO -> {
+                RESPBulkString ArgName = (RESPBulkString) items[1];
+                yield ArgName.toString();
+            }
+            case Commands.SET -> executeSetCommandReplica(items, db);
+            case Commands.GET -> executeGetCommand(items, db);
+            case Commands.CONFIG -> executeConfigGetCommand(items, config);
+            case Commands.KEYS -> executeKeysCommand(items, db);
+            case Commands.INFO -> executeInfoCommand(items, config);
+            case Commands.REPLCONF -> "+OK\r\n";
+            case Commands.PSYNC -> executePsyncCommand(items, config);
+            default -> "-ERR Unknown command\r\n";
+        };
+    }
+
     public String execute(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config, Replicas replicas) throws IOException {
         RESPObject[] items = command.getValues();
         if (items.length == 0) {
@@ -76,6 +102,32 @@ public class CommandExecutor {
             }
         });
 
+        return "+OK\r\n";
+    }
+
+    private String executeSetCommandReplica(RESPObject[] items, ArrayList<KeyValuePair> db) throws IOException {
+        if (items.length < 3) {
+            return "-Err incorrect number of arguments for 'set' command\r\n";
+        }
+        boolean hasExtraProps = items.length > 3;
+        if (hasExtraProps && items.length - 3 < 2) {
+            return "-Err incorrect number of arguments for ;'set' command\r\n";
+        }
+
+        List<String> itemValues = extractItemValuesFromRespObjects(items);
+
+        String key = itemValues.get(1);
+        String value = itemValues.get(2);
+
+        KeyValuePair entry = new KeyValuePair();
+        entry.setValue(value);
+        entry.setKey(key);
+
+        if (items.length > 3) {
+            long expiryValue = new Date().getTime() + Long.parseLong(itemValues.get(4));
+            entry.setExpiryTime(new Timestamp(expiryValue));
+        }
+        db.add(entry);
         return "+OK\r\n";
     }
 

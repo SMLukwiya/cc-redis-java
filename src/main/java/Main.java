@@ -42,7 +42,7 @@ public class Main {
           serverSocket.setReuseAddress(true);
           boolean isSlave = Boolean.parseBoolean(config.get("isSlave"));
           if (isSlave) {
-              new SlaveConnection(config).initiate();
+              new SlaveConnection(config, db).initiate();
           }
 
           while (true) {

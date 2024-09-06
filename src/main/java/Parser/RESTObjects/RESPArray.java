@@ -22,7 +22,7 @@ public class RESPArray implements RESPObject {
     public String toString() {
         StringBuilder sb = new StringBuilder("*" + values.length + "\r\n");
         for (RESPObject value : values) {
-            sb.append(value.toString()).append("\r\n");
+            sb.append(value.toString());
         }
         return sb.toString();
     }

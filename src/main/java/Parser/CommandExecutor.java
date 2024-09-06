@@ -8,36 +8,11 @@ import store.Cache;
 import store.Replicas;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.util.*;
 
 public class CommandExecutor {
-
-//    public String executeReplica(RESPArray command, ArrayList<KeyValuePair> db, Map<String, String> config) throws IOException {
-//        RESPObject[] items = command.getValues();
-//        if (items.length == 0) {
-//            return "-Err Empty command\r\n";
-//        }
-//
-//        RESPBulkString commandName = (RESPBulkString) items[0];
-//        String commandString = commandName.getValue().toUpperCase();
-//
-//        return switch (Commands.valueOf(commandString)) {
-//            case Commands.PING -> "+PONG\r\n";
-//            case Commands.ECHO -> {
-//                RESPBulkString ArgName = (RESPBulkString) items[1];
-//                yield ArgName.toString();
-//            }
-//            case Commands.SET -> executeSetCommandReplica(items, db);
-//            case Commands.GET -> executeGetCommand(items, db);
-//            case Commands.CONFIG -> executeConfigGetCommand(items, config);
-//            case Commands.KEYS -> executeKeysCommand(items, db);
-//            case Commands.INFO -> executeInfoCommand(items, config);
-//            case Commands.REPLCONF -> executeReplConfCommand(items);
-//            case Commands.PSYNC -> executePsyncCommand(items, config);
-//            default -> "-ERR Unknown command\r\n";
-//        };
-//    }
 
     public String execute(RESPArray command, Cache cache, Map<String, String> config, Replicas replicas) throws IOException {
         RESPObject[] items = command.getValues();
@@ -60,7 +35,7 @@ public class CommandExecutor {
             case Commands.CONFIG -> executeConfigGetCommand(items, config);
             case Commands.KEYS -> executeKeysCommand(items, db);
             case Commands.INFO -> executeInfoCommand(items, config);
-            case Commands.REPLCONF -> executeReplConfCommand(items);
+            case Commands.REPLCONF -> executeReplConfCommand(items, cache);
             case Commands.PSYNC -> executePsyncCommand(items, config);
             default -> "-ERR Unknown command\r\n";
         };
@@ -191,17 +166,18 @@ public class CommandExecutor {
         return "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n";
     }
 
-    private String executeReplConfCommand(RESPObject[] items) {
+    private String executeReplConfCommand(RESPObject[] items, Cache cache) {
         if (items.length < 3) {
             return "-Err Invalid number of commands for 'replconf command'";
         }
 
         List<String> commands = extractItemValuesFromRespObjects(items);
         String commandArgument = commands.get(1);
+        String cacheOffset = Integer.toString(cache.getOffset());
 
         return switch (commandArgument) {
             case "listening-port", "capa" -> "+OK\r\n";
-            case "GETACK" -> "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n";
+            case "GETACK" -> "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + cacheOffset.length() + "\r\n" + cacheOffset + "\r\n";
             default -> "";
         };
     }

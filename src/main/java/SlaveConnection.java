@@ -44,6 +44,8 @@ public class SlaveConnection implements Runnable {
                 if (value == null) {
                     break;
                 }
+                db.setCurrOffset();
+                db.setOffset(value.toString().length());
                 String response = new CommandExecutor().execute((RESPArray) value, db, config, replicas);
                 if (response.contains("ACK")) {
                     outputStream.write(response.getBytes());

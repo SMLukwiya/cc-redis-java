@@ -45,12 +45,12 @@ public class Main {
           boolean isSlave = Boolean.parseBoolean(config.get("isSlave"));
           if (isSlave) {
               Socket socket = new Socket(config.get("masterHost"), Integer.parseInt(config.get("masterPort")));
-              pool.execute(new SlaveConnection(socket, config, db, replicas));
+              new Thread(new SlaveConnection(socket, config, db, replicas)).start();
           }
 
           while (true) {
               clientSocket = serverSocket.accept();
-              pool.execute(new ClientConnHandler(clientSocket, db, config, replicas));
+              pool.execute(new ClientConnHandler(clientSocket, db, config, replicas, isSlave));
           }
       } catch (IOException e) {
           System.out.println("IOException: " + e.getMessage());

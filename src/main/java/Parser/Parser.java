@@ -4,6 +4,7 @@ import Parser.RESTObjects.RESPArray;
 import Parser.RESTObjects.RESPBulkString;
 import Parser.RESTObjects.RESPObject;
 import Parser.RESTObjects.RESPSimpleString;
+import store.Cache;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -38,7 +39,7 @@ public class Parser {
         }
 
         char[] chars = new char[length];
-        reader.read(chars, 0, length);
+        reader.read(chars);
         reader.readLine();
         return new RESPBulkString(new String(chars));
     }

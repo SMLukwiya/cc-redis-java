@@ -19,12 +19,22 @@ public class ClientConnHandler implements Runnable {
     Cache db;
     Map<String, String> config;
     Replicas replicas;
+    boolean readAfterHandShake = false;
 
-    public ClientConnHandler(Socket socket, Cache db, Map<String, String> config, Replicas replicas) {
+    public ClientConnHandler(Socket socket, Cache db, Map<String, String> config, Replicas replicas, boolean readAfterHandShake) {
         this.socket = socket;
         this.db = db;
         this.config = config;
         this.replicas = replicas;
+        this.readAfterHandShake = readAfterHandShake;
+
+        if (readAfterHandShake) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     public void run() {

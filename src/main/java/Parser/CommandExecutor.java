@@ -37,6 +37,7 @@ public class CommandExecutor {
             case Commands.INFO -> executeInfoCommand(items, config);
             case Commands.REPLCONF -> executeReplConfCommand(items, cache);
             case Commands.PSYNC -> executePsyncCommand(items, config);
+            case Commands.WAIT -> executeWaitCommand(items);
             default -> "-ERR Unknown command\r\n";
         };
     }
@@ -182,6 +183,15 @@ public class CommandExecutor {
         };
     }
 
+    private String executeWaitCommand(RESPObject[] items) {
+        if (items.length < 3) {
+            return "-Err Invalid number of arguments for 'WAIT' command";
+        }
+
+        List<String> commandArguments = extractItemValuesFromRespObjects(items);
+
+        return ":0\r\n";
+    }
 
     private List<String> extractItemValuesFromRespObjects(RESPObject[] items) {
         return Arrays.stream(items).map(i -> ((RESPBulkString) i).getValue()).toList();

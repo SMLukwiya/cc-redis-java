@@ -9,5 +9,6 @@ public enum Commands {
     KEYS,
     INFO,
     REPLCONF,
-    PSYNC
+    PSYNC,
+    WAIT
 }

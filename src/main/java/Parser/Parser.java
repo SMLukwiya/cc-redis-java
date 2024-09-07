@@ -1,13 +1,13 @@
 package Parser;
 
-import Parser.RESTObjects.RESPArray;
-import Parser.RESTObjects.RESPBulkString;
-import Parser.RESTObjects.RESPObject;
-import Parser.RESTObjects.RESPSimpleString;
-import store.Cache;
+import Parser.RedisTypes.RESPArray;
+import Parser.RedisTypes.RESPBulkString;
+import Parser.RedisTypes.RESPObject;
+import Parser.RedisTypes.RESPSimpleString;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class Parser {
     private final BufferedReader reader;
@@ -53,6 +53,6 @@ public class Parser {
         for (int i = 0; i < length; i++) {
             items[i] = parse();
         }
-        return new RESPArray(items);
+        return new RESPArray(Arrays.stream(items).toList());
     }
 }

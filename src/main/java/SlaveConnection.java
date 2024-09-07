@@ -1,9 +1,9 @@
 import Parser.Parser;
-import Parser.RESTObjects.RESPArray;
-import Parser.RESTObjects.RESPObject;
-import Parser.CommandExecutor;
-import store.Cache;
-import store.Replicas;
+import Parser.RedisTypes.RESPArray;
+import Parser.RedisTypes.RESPObject;
+import Parser.RedisCommandExecutor;
+import store.RedisCache;
+import store.RedisReplicas;
 
 import java.io.*;
 import java.net.Socket;
@@ -12,10 +12,10 @@ import java.util.Map;
 public class SlaveConnection implements Runnable {
     Socket slave;
     Map<String, String> config;
-    Cache db;
-    Replicas replicas;
+    RedisCache db;
+    RedisReplicas replicas;
 
-    public SlaveConnection(Socket socket, Map<String, String> config, Cache db, Replicas replicas) {
+    public SlaveConnection(Socket socket, Map<String, String> config, RedisCache db, RedisReplicas replicas) {
         this.slave = socket;
         this.config = config;
         this.db = db;
@@ -27,28 +27,34 @@ public class SlaveConnection implements Runnable {
             OutputStream outputStream = slave.getOutputStream();
             InputStream inputStream = slave.getInputStream();
             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
 
-            outputStream.write("*1\r\n$4\r\nPING\r\n".getBytes());
+            writer.write("*1\r\n$4\r\nPING\r\n");
+            writer.flush();
             reader.readLine();
-            outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n".getBytes());
+            writer.write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n");
+            writer.flush();
             reader.readLine();
-            outputStream.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n".getBytes());
+            writer.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
+            writer.flush();
             reader.readLine();
-            outputStream.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n".getBytes());
+            writer.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
+            writer.flush();
             reader.readLine(); // read FULLRESYNC
 
             processEmptyRDBFile(reader);
             while (true) {
                 Parser parser = new Parser(reader);
-                RESPObject value = parser.parse();
-                if (value == null) {
-                    break;
+                RESPObject command = parser.parse();
+                if (command == null) {
+                    continue;
                 }
-                db.setCurrOffset();
-                db.setOffset(value.toString().length());
-                String response = new CommandExecutor().execute((RESPArray) value, db, config, replicas);
+                RedisCache.setCurrOffset();
+                RedisCache.setOffset(command.toRedisString().length());
+                String response = new RedisCommandExecutor(slave, writer, config).execute((RESPArray) command);
                 if (response.contains("ACK")) {
-                    outputStream.write(response.getBytes());
+                    writer.write(response);
+                    writer.flush();
                 }
             }
         } catch (IOException e) {

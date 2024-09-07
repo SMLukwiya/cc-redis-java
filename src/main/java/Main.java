@@ -1,7 +1,7 @@
 import RdbParser.RdbParser;
 import RdbParser.KeyValuePair;
-import store.Cache;
-import store.Replicas;
+import store.RedisCache;
+import store.RedisReplicas;
 import utils.Utils;
 
 import java.io.*;
@@ -14,9 +14,9 @@ import java.util.concurrent.Executors;
 public class Main {
   public static void main(String[] args){
       System.out.println("Logs from your program will appear here!");
-      Cache db = new Cache();
+      RedisCache db = new RedisCache();
       Map<String, String> config = new HashMap<>();
-      Replicas replicas = new Replicas();
+      RedisReplicas replicas = new RedisReplicas();
 
       ServerSocket serverSocket = null;
       Socket clientSocket = null;
@@ -33,7 +33,7 @@ public class Main {
 
               RdbParser rdbParser = new RdbParser(dataStream);
               ArrayList<KeyValuePair> data =  rdbParser.parse();
-              db = new Cache(data);
+              db = new RedisCache(data);
               dataStream.close();
           }
 
@@ -51,7 +51,6 @@ public class Main {
           while (true) {
               clientSocket = serverSocket.accept();
               new Thread(new ClientConnHandler(clientSocket, db, config, replicas, isSlave)).start();
-//              pool.execute(new ClientConnHandler(clientSocket, db, config, replicas, isSlave));
           }
       } catch (IOException e) {
           System.out.println("IOException: " + e.getMessage());

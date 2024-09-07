@@ -1,14 +1,11 @@
 import Parser.Parser;
-import Parser.RESTObjects.RESPArray;
-import Parser.RESTObjects.RESPObject;
-import Parser.CommandExecutor;
-import store.Cache;
-import store.Replicas;
+import Parser.RedisTypes.RESPArray;
+import Parser.RedisTypes.RESPObject;
+import Parser.RedisCommandExecutor;
+import store.RedisCache;
+import store.RedisReplicas;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.Socket;
 import java.util.Base64;
 import java.util.Map;
@@ -16,12 +13,12 @@ import java.util.Map;
 public class ClientConnHandler implements Runnable {
     private static String emptyRDBFileContent = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==";
     private final Socket socket;
-    Cache db;
+    RedisCache db;
     Map<String, String> config;
-    Replicas replicas;
+    RedisReplicas replicas;
     boolean readAfterHandShake = false;
 
-    public ClientConnHandler(Socket socket, Cache db, Map<String, String> config, Replicas replicas, boolean readAfterHandShake) {
+    public ClientConnHandler(Socket socket, RedisCache db, Map<String, String> config, RedisReplicas replicas, boolean readAfterHandShake) {
         this.socket = socket;
         this.db = db;
         this.config = config;
@@ -40,37 +37,44 @@ public class ClientConnHandler implements Runnable {
     public void run() {
         try {
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+
             while (true) {
                 Parser parser = new Parser(reader);
-                RESPObject value = parser.parse();
+                RESPObject command = parser.parse();
                 OutputStream outputStream = socket.getOutputStream();
-                if (value instanceof RESPArray) {
-                    String argument = new CommandExecutor().execute((RESPArray) value, db, config, replicas);
-                    outputStream.write(argument.getBytes());
+
+                if (command instanceof RESPArray) {
+                    String argument = new RedisCommandExecutor(socket, writer, config).execute((RESPArray) command);
+                    if (argument == null) {
+                        continue;
+                    }
+                    writer.write(argument);
 
                     if (argument.contains("FULLRESYNC")) {
-                        sendEmptyRDBFile(outputStream);
-                        replicas.setReplica(outputStream);
+                        sendEmptyRDBFile(writer, outputStream);
+                        RedisReplicas.setReplica(socket, writer);
                     }
-                    outputStream.flush();
+                    writer.flush();
                 }
             }
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         } finally {
-            try {
-                if (socket != null) {
-                    socket.close();
-                }
-            } catch (IOException e) {
-                System.out.println("IOException: " + e.getMessage());
-            }
+//            try {
+//                if (socket != null) {
+//                    socket.close();
+//                }
+//            } catch (IOException e) {
+//                System.out.println("IOException: " + e.getMessage());
+//            }
         }
     }
 
-    private void sendEmptyRDBFile(OutputStream os) throws IOException {
+    private void sendEmptyRDBFile(BufferedWriter writer, OutputStream os) throws IOException {
         byte[] bytes = Base64.getDecoder().decode(emptyRDBFileContent);
-        os.write(("$" + bytes.length + "\r\n").getBytes());
+        writer.write(("$" + bytes.length + "\r\n"));
+        writer.flush();
         os.write(bytes);
     }
 }

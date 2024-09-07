@@ -1,7 +1,5 @@
 package Parser;
 
-import javax.xml.crypto.Data;
-
 public enum DataType {
     SIMPLE_STRING('+'),
     SIMPLE_ERROR('-'),
@@ -22,10 +20,6 @@ public enum DataType {
 
     DataType(char prefix) {
         this.prefix = prefix;
-    }
-
-    public char getPrefix() {
-        return prefix;
     }
 
     public static DataType getTypeFromPrefix(char prefix) {

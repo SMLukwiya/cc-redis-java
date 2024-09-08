@@ -4,12 +4,15 @@ import java.sql.Timestamp;
 import java.time.temporal.ValueRange;
 
 public class KeyValuePair {
+    String id;
     String key;
     ValueType type;
     Object value;
     Timestamp expiryTime;
 
-//    public KeyValuePair(String key, ValueType value, ValueType type) {
+    public KeyValuePair() {}
+
+//    public KeyValuePair(String key, Object value, ValueType type, String id) {
 //        this.key = key;
 //        this.value = value;
 //        this.type = type;
@@ -37,6 +40,14 @@ public class KeyValuePair {
 
     public void setValue(Object value) {
         this.value = value;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public Timestamp getExpiryTime() {

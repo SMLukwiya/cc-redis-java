@@ -46,6 +46,7 @@ public class RedisCommandExecutor {
             case Commands.PSYNC -> executePsync(commandArgs);
             case Commands.WAIT -> executeWait(commandArgs);
             case Commands.TYPE -> executeType(commandArgs);
+            case Commands.XADD -> executeXadd(commandArgs);
             default -> "-ERR Unknown command\r\n";
         };
     }
@@ -193,13 +194,37 @@ public class RedisCommandExecutor {
     private String executeType(List<String> command) {
         String key = command.get(1);
         KeyValuePair entry = RedisCache.getCache().stream().filter(i -> i.getKey().equals(key)).findFirst().orElse(null);
-
         if (entry == null) {
             return new RESPSimpleString("none").toRedisString();
         }
 
         String keyType = entry.getType().getTypeName();
         return new RESPSimpleString(keyType).toRedisString();
+    }
+
+    private String executeXadd(List<String> commandArgs) {
+        if (commandArgs.size() < 5) {
+            return "-Err Invalid number of arguments for 'xadd' command";
+        }
+
+        String streamKey = commandArgs.get(1);
+        String streamEntryId = commandArgs.get(2);
+        List<String> streamEntriesList = commandArgs.subList(3, commandArgs.size());
+
+        List<Map<String, Object>> streamEntries = new ArrayList<>();
+        for (int i = 0; i < streamEntriesList.size(); i += 2) {
+            streamEntries.add(Map.of(streamEntriesList.get(i), streamEntriesList.get(i+1)));
+        }
+
+        KeyValuePair entry = new KeyValuePair();
+        entry.setKey(streamKey);
+        entry.setValue(List.of());
+        entry.setId(streamEntryId);
+        entry.setType(ValueType.STREAM);
+        entry.setValue(streamEntries);
+        RedisCache.setCache(entry);
+
+        return new RESPSimpleString(streamEntryId).toRedisString();
     }
 
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {

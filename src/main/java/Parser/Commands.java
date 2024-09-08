@@ -11,5 +11,6 @@ public enum Commands {
     REPLCONF,
     PSYNC,
     WAIT,
-    TYPE
+    TYPE,
+    XADD
 }

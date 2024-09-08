@@ -11,7 +11,8 @@ public enum ValueType {
     INTSET(11, ""),
     SORTED_SET_IN_ZIPLIST(12, ""),
     HASHMAP_IN_ZIPLIST(13, ""),
-    LIST_IN_QUICKLIST(14, "");
+    LIST_IN_QUICKLIST(14, ""),
+    STREAM(15, "stream");
 
     private final int type;
     private final String typeName;
@@ -20,18 +21,8 @@ public enum ValueType {
         this.typeName = typeName;
     }
 
-    public int getType() { return type; }
     public String getTypeName() { return typeName; }
 
-    public static ValueType getTypeFromInt(int t) {
-        for (ValueType i : ValueType.values()) {
-            if (i.getType() == t) {
-                return i;
-            }
-        }
-
-        throw new IllegalArgumentException("Unknown Value Type " + t);
-    }
 }
 
 

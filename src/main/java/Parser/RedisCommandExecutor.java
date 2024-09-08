@@ -211,17 +211,37 @@ public class RedisCommandExecutor {
         String streamEntryId = commandArgs.get(2);
         List<String> streamEntriesList = commandArgs.subList(3, commandArgs.size());
 
-        List<Map<String, Object>> streamEntries = new ArrayList<>();
-        for (int i = 0; i < streamEntriesList.size(); i += 2) {
-            streamEntries.add(Map.of(streamEntriesList.get(i), streamEntriesList.get(i+1)));
+        KeyValuePair stream = RedisCache.getCache()
+          .stream()
+          .filter(it -> it.getKey().equals(streamKey))
+          .findFirst()
+          .orElse(null);
+
+        RESPStream streamInstance;
+
+        if (stream != null) {
+            streamInstance = (RESPStream) stream.getValue();
+        } else {
+            streamInstance = new RESPStream();
         }
 
+//        RESPStream streamInstance = new RESPStream(); // name it better
+        RESPStream.RespStreamEntry streamEntry = streamInstance.new RespStreamEntry();
+        String isStreamIdValidErrorMsg = streamInstance.isStreamEntryValid(streamEntryId);
+        if (!isStreamIdValidErrorMsg.isEmpty()) {
+            return isStreamIdValidErrorMsg;
+        }
+        streamEntry.setId(streamEntryId);
+        for (int i = 0; i < streamEntriesList.size(); i += 2) {
+            streamEntry.addStreamEntry(Map.of(streamEntriesList.get(i), streamEntriesList.get(i+1)));
+//            streamEntries.add(Map.of(streamEntriesList.get(i), streamEntriesList.get(i+1)));
+        }
+        streamInstance.addStreamEntry(streamEntry);
+//
         KeyValuePair entry = new KeyValuePair();
         entry.setKey(streamKey);
-        entry.setValue(List.of());
-        entry.setId(streamEntryId);
         entry.setType(ValueType.STREAM);
-        entry.setValue(streamEntries);
+        entry.setValue(streamInstance);
         RedisCache.setCache(entry);
 
         return new RESPSimpleString(streamEntryId).toRedisString();
@@ -230,4 +250,5 @@ public class RedisCommandExecutor {
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {
         return command.stream().map(i -> ((RESPBulkString) i).value()).toList();
     }
+
 }

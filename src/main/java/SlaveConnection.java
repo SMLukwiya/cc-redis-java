@@ -12,14 +12,10 @@ import java.util.Map;
 public class SlaveConnection implements Runnable {
     Socket slave;
     Map<String, String> config;
-    RedisCache db;
-    RedisReplicas replicas;
 
-    public SlaveConnection(Socket socket, Map<String, String> config, RedisCache db, RedisReplicas replicas) {
+    public SlaveConnection(Socket socket, Map<String, String> config) {
         this.slave = socket;
         this.config = config;
-        this.db = db;
-        this.replicas = replicas;
     }
 
     public void run() {
@@ -28,23 +24,10 @@ public class SlaveConnection implements Runnable {
             InputStream inputStream = slave.getInputStream();
             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream));
+            performHandshake(writer, reader);
 
-            writer.write("*1\r\n$4\r\nPING\r\n");
-            writer.flush();
-            reader.readLine();
-            writer.write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n");
-            writer.flush();
-            reader.readLine();
-            writer.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
-            writer.flush();
-            reader.readLine();
-            writer.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
-            writer.flush();
-            reader.readLine(); // read FULLRESYNC
-
-            processEmptyRDBFile(reader);
+            Parser parser = new Parser(reader);
             while (true) {
-                Parser parser = new Parser(reader);
                 RESPObject command = parser.parse();
                 if (command == null) {
                     continue;
@@ -62,7 +45,24 @@ public class SlaveConnection implements Runnable {
         }
     }
 
-    private void processEmptyRDBFile(BufferedReader reader) throws IOException {
+    private void performHandshake(BufferedWriter writer, BufferedReader reader) throws IOException {
+        writer.write("*1\r\n$4\r\nPING\r\n");
+        writer.flush();
+        reader.readLine();
+        writer.write("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n");
+        writer.flush();
+        reader.readLine();
+        writer.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
+        writer.flush();
+        reader.readLine();
+        writer.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
+        writer.flush();
+        reader.readLine(); // read FULLRESYNC
+
+        readEmptyRDBFile(reader);
+    }
+
+    private void readEmptyRDBFile(BufferedReader reader) throws IOException {
         if (reader.read() == -1) {
             return;
         }

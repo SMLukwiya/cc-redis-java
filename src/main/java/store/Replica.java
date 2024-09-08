@@ -33,8 +33,8 @@ public class Replica {
         this.currentOffset = currentOffset;
     }
 
-    public void passCommand(List<RESPObject> commandArr) throws IOException {
-        String command = new RESPArray(commandArr).toRedisString();
+    public void passCommand(List<String> commandArgs) throws IOException {
+        String command = constructCommand(commandArgs);
         desiredOffset += command.length();
         writer.write(command);
         writer.flush();
@@ -50,5 +50,10 @@ public class Replica {
 
     public boolean isSyncedWithMaster() {
         return desiredOffset - REPLCONFGETACKSIZE <= currentOffset;
+    }
+
+    private String constructCommand(List<String> commandArgs) {
+        List<RESPObject> command = commandArgs.stream().map(c -> (RESPObject) new RESPBulkString(c)).toList();
+        return new RESPArray(command).toRedisString();
     }
 }

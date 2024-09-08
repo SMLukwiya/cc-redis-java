@@ -13,16 +13,12 @@ import java.util.Map;
 public class ClientConnHandler implements Runnable {
     private static String emptyRDBFileContent = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==";
     private final Socket socket;
-    RedisCache db;
     Map<String, String> config;
-    RedisReplicas replicas;
     boolean readAfterHandShake = false;
 
-    public ClientConnHandler(Socket socket, RedisCache db, Map<String, String> config, RedisReplicas replicas, boolean readAfterHandShake) {
+    public ClientConnHandler(Socket socket, Map<String, String> config, boolean readAfterHandShake) {
         this.socket = socket;
-        this.db = db;
         this.config = config;
-        this.replicas = replicas;
         this.readAfterHandShake = readAfterHandShake;
 
         if (readAfterHandShake) {
@@ -38,9 +34,9 @@ public class ClientConnHandler implements Runnable {
         try {
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            Parser parser = new Parser(reader);
 
             while (true) {
-                Parser parser = new Parser(reader);
                 RESPObject command = parser.parse();
                 OutputStream outputStream = socket.getOutputStream();
 

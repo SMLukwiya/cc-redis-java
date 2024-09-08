@@ -1,5 +1,7 @@
 package store;
 
+import Parser.RedisTypes.RESPArray;
+import Parser.RedisTypes.RESPBulkString;
 import Parser.RedisTypes.RESPObject;
 
 import java.io.BufferedWriter;
@@ -19,11 +21,11 @@ public class RedisReplicas {
         replicas.add(new Replica(socket, writer));
     }
 
-    public static void propagateCommand(List<RESPObject> command) {
+    public static void propagateCommand(List<String> commandArgs) {
         prevWritesAvailable = true;
         replicas.forEach(replica -> {
             try {
-                replica.passCommand(command);
+                replica.passCommand(commandArgs);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

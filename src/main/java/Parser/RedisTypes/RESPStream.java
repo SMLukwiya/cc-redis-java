@@ -25,18 +25,32 @@ public class RESPStream {
     }
 
     public List<RespStreamEntry> getStreamEntriesWithinRange(String startId, String endId) {
+        final long startIdMilliSecondsPart;
+        final long startIdSequenceNoPart;
+        final long endIdMilliSecondsPart;
+        final long endIdSequenceNoPart;
+        boolean getFromStart = startId.equals("-");
+        boolean getUntilEnd = endId.equals("+");
         String[] startIdParts = startId.split("-");
         String[] endIdParts = endId.split("-");
+
+        if (getFromStart) {
+            startIdMilliSecondsPart = 0;
+        } else {
+            startIdMilliSecondsPart = Long.parseLong(startIdParts[0]);
+        }
+
+        if (getUntilEnd) {
+            endIdMilliSecondsPart = getLastStreamEntry().getMilliSecondsIdPart();
+        } else {
+            endIdMilliSecondsPart = Long.parseLong(endIdParts[0]);
+        }
+
         boolean isOnlyComparingMilliSecondsIdPart = startIdParts.length == 1 || endIdParts.length == 1;
 
-        long startIdMilliSecondsPart = Long.parseLong(startIdParts[0]);
-        final long startIdSequenceNoPart;
-        long endIdMilliSecondsPart = Long.parseLong(endIdParts[0]);
-        final long endIdSequenceNoPart;
-
         if (!isOnlyComparingMilliSecondsIdPart) {
-            startIdSequenceNoPart = Long.parseLong(startIdParts[1]);
-            endIdSequenceNoPart = Long.parseLong(endIdParts[1]);
+            startIdSequenceNoPart = getFromStart ? 0 : Long.parseLong(startIdParts[1]);
+            endIdSequenceNoPart = getUntilEnd ? getLastStreamEntry().getSequenceNoIdPart() :  Long.parseLong(endIdParts[1]);
         } else {
             startIdSequenceNoPart = 0;
             endIdSequenceNoPart = 0;

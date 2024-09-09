@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class RESPStream {
-    static private List<RespStreamEntry> entries = new ArrayList<>();
+    private List<RespStreamEntry> entries = new ArrayList<>();
 
     public RESPStream() {}
 

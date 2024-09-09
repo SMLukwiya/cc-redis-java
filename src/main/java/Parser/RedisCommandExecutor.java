@@ -210,6 +210,7 @@ public class RedisCommandExecutor {
         String streamKey = commandArgs.get(1);
         String streamEntryId = commandArgs.get(2);
         List<String> streamEntriesList = commandArgs.subList(3, commandArgs.size());
+        boolean isFullGeneratedId = streamEntryId.equals("*");
 
         KeyValuePair stream = RedisCache.getCache()
           .stream()
@@ -225,7 +226,6 @@ public class RedisCommandExecutor {
             streamInstance = new RESPStream();
         }
 
-//        RESPStream streamInstance = new RESPStream(); // name it better
         RESPStream.RespStreamEntry streamEntry = streamInstance.new RespStreamEntry();
         String isStreamIdValidErrorMsg = streamInstance.isStreamEntryValid(streamEntryId);
         if (!isStreamIdValidErrorMsg.isEmpty()) {
@@ -236,17 +236,16 @@ public class RedisCommandExecutor {
         streamEntry.setId(streamEntryId);
         for (int i = 0; i < streamEntriesList.size(); i += 2) {
             streamEntry.addStreamEntry(Map.of(streamEntriesList.get(i), streamEntriesList.get(i+1)));
-//            streamEntries.add(Map.of(streamEntriesList.get(i), streamEntriesList.get(i+1)));
         }
         streamInstance.addStreamEntry(streamEntry);
-//
+
         KeyValuePair entry = new KeyValuePair();
         entry.setKey(streamKey);
         entry.setType(ValueType.STREAM);
         entry.setValue(streamInstance);
         RedisCache.setCache(entry);
 
-        return new RESPSimpleString(streamEntryId).toRedisString();
+        return isFullGeneratedId ? new RESPBulkString(streamEntryId).toRedisString() : new RESPSimpleString(streamEntryId).toRedisString();
     }
 
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {

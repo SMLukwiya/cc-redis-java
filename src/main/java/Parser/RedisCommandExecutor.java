@@ -48,6 +48,7 @@ public class RedisCommandExecutor {
             case Commands.TYPE -> executeType(commandArgs);
             case Commands.XADD -> executeXadd(commandArgs);
             case Commands.XRANGE -> executeXrange(commandArgs);
+            case Commands.XREAD -> executeXread(commandArgs);
             default -> "-ERR Unknown command\r\n";
         };
     }
@@ -272,6 +273,60 @@ public class RedisCommandExecutor {
         List<RESPStream.RespStreamEntry> streamEntries = value.getStreamEntriesWithinRange(streamEntryStartId, streamEntryEndId);
         List<RESPObject> streamEntriesAsRedisArray = streamEntries.stream().map(e -> e.convertStreamToRedisArray()).toList();
         return new RESPArray(streamEntriesAsRedisArray).toRedisString();
+    }
+
+    private String executeXread(List<String> command) {
+        if (command.size() < 4) {
+            return "-Err Invalid number of arguments for 'XREAD' command";
+        }
+
+        // get stream keys and stream entry Ids
+        // number of keys is equal to number of stream ids
+        List<String> streamsArgs = command.subList(2, command.size());
+        if (streamsArgs.size() % 2 != 0) {
+            return "-Err Invalid number of arguments for 'XREAD' command";
+        }
+
+        int numOfStreams = streamsArgs.size() / 2;
+        ArrayList<KeyValuePair> streamsFromCache = new ArrayList<>();
+
+        for (int i = 0; i < numOfStreams; i++) {
+            final int index = i;
+            KeyValuePair entry = RedisCache.getCache()
+              .stream()
+              .filter(e -> e.getKey().equals(streamsArgs.get(index)))
+              .findFirst()
+              .orElse(null);
+            streamsFromCache.add(entry);
+        }
+
+        ArrayList<RESPObject> streamsWithKeysRedisArray = new ArrayList<>();
+        for (int i = 0; i < streamsFromCache.size(); i++) {
+            KeyValuePair entry = streamsFromCache.get(i);
+            RESPStream stream = (RESPStream) entry.getValue();
+
+            // position of stream entry id is (numOfStreams) ahead
+            String streamEntryId = streamsArgs.get(i + numOfStreams);
+            String[] streamEntryIdParts = streamEntryId.split("-");
+            boolean idSequenceNoPartExists = streamEntryIdParts.length > 1;
+
+            // current stream entry is excluded by simply adding one to the current stream id
+            if (idSequenceNoPartExists) {
+                long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[1]) + 1;
+                streamEntryId = streamEntryIdParts[0] + "-" + excludeCurrentStreamId;
+            } else {
+                long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[0]) + 1;
+                streamEntryId = Long.toString(excludeCurrentStreamId);
+            }
+
+            List<RESPStream.RespStreamEntry> streamEntries = stream.getStreamEntriesWithinRange(streamEntryId, "+");
+            List<RESPObject> streamEntriesAsRedisArrayList = streamEntries.stream().map(e -> e.convertStreamToRedisArray()).toList();
+            RESPObject streamEntriesCombined = new RESPArray(streamEntriesAsRedisArrayList);
+            RESPObject streamWithKeyAndEntriesAsRedisArray = new RESPArray(List.of(new RESPBulkString(entry.getKey()), streamEntriesCombined));
+            streamsWithKeysRedisArray.add(streamWithKeyAndEntriesAsRedisArray);
+        }
+
+        return new RESPArray(streamsWithKeysRedisArray).toRedisString();
     }
 
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {

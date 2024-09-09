@@ -13,5 +13,6 @@ public enum Commands {
     WAIT,
     TYPE,
     XADD,
-    XRANGE
+    XRANGE,
+    XREAD
 }

@@ -41,12 +41,12 @@ public class RESPStream {
         }
 
         if (getUntilEnd) {
-            endIdMilliSecondsPart = getLastStreamEntry().getMilliSecondsIdPart();
+            endIdMilliSecondsPart = getLastStreamEntry().getSequenceNoIdPart();
         } else {
             endIdMilliSecondsPart = Long.parseLong(endIdParts[0]);
         }
 
-        boolean isOnlyComparingMilliSecondsIdPart = startIdParts.length == 1 || endIdParts.length == 1;
+        boolean isOnlyComparingMilliSecondsIdPart = startIdParts.length == 1 || (endIdParts.length == 1 && !getUntilEnd);
 
         if (!isOnlyComparingMilliSecondsIdPart) {
             startIdSequenceNoPart = getFromStart ? 0 : Long.parseLong(startIdParts[1]);

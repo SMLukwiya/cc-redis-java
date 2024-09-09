@@ -47,6 +47,7 @@ public class RedisCommandExecutor {
             case Commands.WAIT -> executeWait(commandArgs);
             case Commands.TYPE -> executeType(commandArgs);
             case Commands.XADD -> executeXadd(commandArgs);
+            case Commands.XRANGE -> executeXrange(commandArgs);
             default -> "-ERR Unknown command\r\n";
         };
     }
@@ -246,6 +247,31 @@ public class RedisCommandExecutor {
         RedisCache.setCache(entry);
 
         return isFullGeneratedId ? new RESPBulkString(streamEntryId).toRedisString() : new RESPSimpleString(streamEntryId).toRedisString();
+    }
+
+    private String executeXrange(List<String> command) {
+        if (command.size() < 4) {
+            return "-Err Invalid number of arguments for 'XRANGE' command";
+        }
+
+        String streamKey = command.get(1);
+        String streamEntryStartId = command.get(2);
+        String streamEntryEndId = command.get(3);
+
+        KeyValuePair entry = RedisCache.getCache()
+          .stream()
+          .filter(e -> e.getKey().equals(streamKey))
+          .findFirst()
+          .orElse(null);
+
+        if (entry == null) {
+            return "-Err no item for key (" + streamKey + ") found";
+        }
+
+        RESPStream value = (RESPStream) entry.getValue();
+        List<RESPStream.RespStreamEntry> streamEntries = value.getStreamEntriesWithinRange(streamEntryStartId, streamEntryEndId);
+        List<RESPObject> streamEntriesAsRedisArray = streamEntries.stream().map(e -> e.convertStreamToRedisArray()).toList();
+        return new RESPArray(streamEntriesAsRedisArray).toRedisString();
     }
 
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {

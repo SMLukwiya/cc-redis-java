@@ -24,6 +24,35 @@ public class RESPStream {
         entries.add(streamEntry);
     }
 
+    public List<RespStreamEntry> getStreamEntriesWithinRange(String startId, String endId) {
+        String[] startIdParts = startId.split("-");
+        String[] endIdParts = endId.split("-");
+        boolean isOnlyComparingMilliSecondsIdPart = startIdParts.length == 1 || endIdParts.length == 1;
+
+        long startIdMilliSecondsPart = Long.parseLong(startIdParts[0]);
+        final long startIdSequenceNoPart;
+        long endIdMilliSecondsPart = Long.parseLong(endIdParts[0]);
+        final long endIdSequenceNoPart;
+
+        if (!isOnlyComparingMilliSecondsIdPart) {
+            startIdSequenceNoPart = Long.parseLong(startIdParts[1]);
+            endIdSequenceNoPart = Long.parseLong(endIdParts[1]);
+        } else {
+            startIdSequenceNoPart = 0;
+            endIdSequenceNoPart = 0;
+        }
+
+        return entries.stream()
+          .filter(
+            e -> (
+              e.getMilliSecondsIdPart() >= startIdMilliSecondsPart &&
+                e.getMilliSecondsIdPart() <= endIdMilliSecondsPart &&
+                e.getSequenceNoIdPart() >=  startIdSequenceNoPart &&
+                e.getSequenceNoIdPart() <= endIdSequenceNoPart
+            )
+          ).toList();
+    }
+
     public String isStreamEntryValid(String streamEntryId) {
         RespStreamEntry lastStreamEntry = getLastStreamEntry();
         if (lastStreamEntry == null) return "";
@@ -66,15 +95,15 @@ public class RESPStream {
         RespStreamEntry lastStreamEntry = getLastStreamEntry();
 
         if (streamEntryId.equals("*")) {
-            long milliSecondPart = System.currentTimeMillis();
+            long milliSecondIdPart = System.currentTimeMillis();
             if (lastStreamEntry == null) {
-                return id.append(milliSecondPart).append("-").append(0).toString();
+                return id.append(milliSecondIdPart).append("-").append(0).toString();
             } else {
                 String[] lastEntryIdParts = lastStreamEntry.getId().split("-");
-                long lastEntryMillisecondPart = Long.parseLong(lastEntryIdParts[0]);
-                if (lastEntryMillisecondPart == milliSecondPart) {
-                    long lastEntrysequenceNoPart = Long.parseLong(lastEntryIdParts[1]);
-                    return id.append(milliSecondPart).append("-").append(lastEntrysequenceNoPart + 1).toString();
+                long lastEntryMillisecondIdPart = Long.parseLong(lastEntryIdParts[0]);
+                if (lastEntryMillisecondIdPart == milliSecondIdPart) {
+                    long lastEntrysequenceNoIdPart = Long.parseLong(lastEntryIdParts[1]);
+                    return id.append(milliSecondIdPart).append("-").append(lastEntrysequenceNoIdPart + 1).toString();
                 }
             }
         }
@@ -118,6 +147,34 @@ public class RESPStream {
             this.streamEntries.add(streamEntry);
         }
 
+        public List<Long> convertStreamEntryIdToLong() {
+            String[] idParts = id.split("-");
+            return Arrays.stream(idParts)
+              .toList()
+              .stream()
+              .map(Long::parseLong)
+              .toList();
+        }
+
+        public long getMilliSecondsIdPart() {
+            return convertStreamEntryIdToLong().getFirst();
+        }
+
+        public long getSequenceNoIdPart() {
+            return convertStreamEntryIdToLong().getLast();
+        }
+
+        public RESPObject convertStreamToRedisArray() {
+            ArrayList<RESPObject> streamIdEntryBulkString = new ArrayList<>();
+            for (Map<String, Object> entry : streamEntries) {
+                entry.forEach((k, v) -> {
+                    streamIdEntryBulkString.add(new RESPBulkString(k));
+                    streamIdEntryBulkString.add(new RESPBulkString(v.toString()));
+                });
+            }
+            RESPObject entriesRedisArrRepresentation = new RESPArray(streamIdEntryBulkString);
+            return new RESPArray(List.of(new RESPBulkString(id), entriesRedisArrRepresentation));
+        }
     }
 
 }

@@ -12,5 +12,6 @@ public enum Commands {
     PSYNC,
     WAIT,
     TYPE,
-    XADD
+    XADD,
+    XRANGE
 }

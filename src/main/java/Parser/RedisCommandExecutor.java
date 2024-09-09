@@ -231,6 +231,8 @@ public class RedisCommandExecutor {
         if (!isStreamIdValidErrorMsg.isEmpty()) {
             return isStreamIdValidErrorMsg;
         }
+
+        streamEntryId = streamInstance.createNextId(streamEntryId);
         streamEntry.setId(streamEntryId);
         for (int i = 0; i < streamEntriesList.size(); i += 2) {
             streamEntry.addStreamEntry(Map.of(streamEntriesList.get(i), streamEntriesList.get(i+1)));

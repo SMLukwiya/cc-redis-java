@@ -11,6 +11,8 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.net.Socket;
 import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 
 public class RedisCommandExecutor {
@@ -282,14 +284,23 @@ public class RedisCommandExecutor {
 
         // get stream keys and stream entry Ids
         // number of keys is equal to number of stream ids
-        List<String> streamsArgs = command.subList(2, command.size());
+        List<String> streamsArgs;
+        long timeToBlock = 0;
+        boolean isBlockingRead = command.get(1).equalsIgnoreCase("block");
+        if (isBlockingRead) {
+            streamsArgs = command.subList(4, command.size());
+            timeToBlock = Long.parseLong(command.get(2));
+        } else {
+            streamsArgs = command.subList(2, command.size());
+        }
+
         if (streamsArgs.size() % 2 != 0) {
             return "-Err Invalid number of arguments for 'XREAD' command";
         }
 
         int numOfStreams = streamsArgs.size() / 2;
-        ArrayList<KeyValuePair> streamsFromCache = new ArrayList<>();
 
+        ArrayList<KeyValuePair> streamsFromCache = new ArrayList<>();
         for (int i = 0; i < numOfStreams; i++) {
             final int index = i;
             KeyValuePair entry = RedisCache.getCache()
@@ -300,6 +311,34 @@ public class RedisCommandExecutor {
             streamsFromCache.add(entry);
         }
 
+        // blocking read
+        Instant start = Instant.now();
+        boolean newDataAvailable = false;
+
+        while (Duration.between(start, Instant.now()).toMillis() < timeToBlock) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+            }
+
+            for (int i = 0; i < streamsFromCache.size(); i++) {
+                KeyValuePair entry = streamsFromCache.get(i);
+                RESPStream stream = (RESPStream) entry.getValue();
+
+                // position of stream entry id is (numOfStreams) ahead
+                String streamEntryId = streamsArgs.get(i + numOfStreams);
+                String nextStreamEntryId = getNextStreamId(streamEntryId);
+                List<RESPStream.RespStreamEntry> streamEntries = stream.getStreamEntriesWithinRange(nextStreamEntryId, "+");
+                if (!streamEntries.isEmpty()) {
+                    newDataAvailable = true;
+                }
+            }
+        }
+
+        if (!newDataAvailable && isBlockingRead) {
+            return "$-1\r\n";
+        }
+
         ArrayList<RESPObject> streamsWithKeysRedisArray = new ArrayList<>();
         for (int i = 0; i < streamsFromCache.size(); i++) {
             KeyValuePair entry = streamsFromCache.get(i);
@@ -307,19 +346,8 @@ public class RedisCommandExecutor {
 
             // position of stream entry id is (numOfStreams) ahead
             String streamEntryId = streamsArgs.get(i + numOfStreams);
-            String[] streamEntryIdParts = streamEntryId.split("-");
-            boolean idSequenceNoPartExists = streamEntryIdParts.length > 1;
-
-            // current stream entry is excluded by simply adding one to the current stream id
-            if (idSequenceNoPartExists) {
-                long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[1]) + 1;
-                streamEntryId = streamEntryIdParts[0] + "-" + excludeCurrentStreamId;
-            } else {
-                long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[0]) + 1;
-                streamEntryId = Long.toString(excludeCurrentStreamId);
-            }
-
-            List<RESPStream.RespStreamEntry> streamEntries = stream.getStreamEntriesWithinRange(streamEntryId, "+");
+            String nextStreamEntryId = getNextStreamId(streamEntryId);
+            List<RESPStream.RespStreamEntry> streamEntries = stream.getStreamEntriesWithinRange(nextStreamEntryId, "+");
             List<RESPObject> streamEntriesAsRedisArrayList = streamEntries.stream().map(e -> e.convertStreamToRedisArray()).toList();
             RESPObject streamEntriesCombined = new RESPArray(streamEntriesAsRedisArrayList);
             RESPObject streamWithKeyAndEntriesAsRedisArray = new RESPArray(List.of(new RESPBulkString(entry.getKey()), streamEntriesCombined));
@@ -327,6 +355,22 @@ public class RedisCommandExecutor {
         }
 
         return new RESPArray(streamsWithKeysRedisArray).toRedisString();
+    }
+
+    private String getNextStreamId(String streamEntryId) {
+        String[] streamEntryIdParts = streamEntryId.split("-");
+        boolean idSequenceNoPartExists = streamEntryIdParts.length > 1;
+        String result;
+
+        // current stream entry is excluded by simply adding one to the current stream id
+        if (idSequenceNoPartExists) {
+            long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[1]) + 1;
+            result = streamEntryIdParts[0] + "-" + excludeCurrentStreamId;
+        } else {
+            long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[0]) + 1;
+            result = Long.toString(excludeCurrentStreamId);
+        }
+        return result;
     }
 
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {

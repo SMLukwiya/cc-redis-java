@@ -14,6 +14,8 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class RedisCommandExecutor {
     Socket socket;
@@ -285,11 +287,14 @@ public class RedisCommandExecutor {
         // get stream keys and stream entry Ids
         // number of keys is equal to number of stream ids
         List<String> streamsArgs;
-        long timeToBlock = 0;
+        long timeToBlock = -1;
         boolean isBlockingRead = command.get(1).equalsIgnoreCase("block");
+        boolean isInfiniteLoop = false;
+
         if (isBlockingRead) {
             streamsArgs = command.subList(4, command.size());
             timeToBlock = Long.parseLong(command.get(2));
+            isInfiniteLoop = timeToBlock == 0;
         } else {
             streamsArgs = command.subList(2, command.size());
         }
@@ -315,7 +320,7 @@ public class RedisCommandExecutor {
         Instant start = Instant.now();
         boolean newDataAvailable = false;
 
-        while (Duration.between(start, Instant.now()).toMillis() < timeToBlock) {
+        while (timeToBlock == 0 || Duration.between(start, Instant.now()).toMillis() < timeToBlock) {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
@@ -332,6 +337,9 @@ public class RedisCommandExecutor {
                 if (!streamEntries.isEmpty()) {
                     newDataAvailable = true;
                 }
+            }
+            if (isInfiniteLoop && newDataAvailable) {
+                break;
             }
         }
 

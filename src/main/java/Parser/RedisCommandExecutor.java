@@ -319,6 +319,7 @@ public class RedisCommandExecutor {
         // blocking read
         Instant start = Instant.now();
         boolean newDataAvailable = false;
+        String previousStreamEntryId = "";
 
         while (timeToBlock == 0 || Duration.between(start, Instant.now()).toMillis() < timeToBlock) {
             try {
@@ -332,6 +333,15 @@ public class RedisCommandExecutor {
 
                 // position of stream entry id is (numOfStreams) ahead
                 String streamEntryId = streamsArgs.get(i + numOfStreams);
+                // get last entry for "$" Id
+                if (streamEntryId.equals("$") && previousStreamEntryId.isEmpty()) {
+                    RESPStream.RespStreamEntry previousEntryStream = stream.getLastStreamEntry();
+                    if (previousEntryStream != null) {
+                        previousStreamEntryId = previousEntryStream.getId();
+                    }
+                }
+
+                streamEntryId = !previousStreamEntryId.isEmpty() ? previousStreamEntryId : streamEntryId;
                 String nextStreamEntryId = getNextStreamId(streamEntryId);
                 List<RESPStream.RespStreamEntry> streamEntries = stream.getStreamEntriesWithinRange(nextStreamEntryId, "+");
                 if (!streamEntries.isEmpty()) {
@@ -354,6 +364,7 @@ public class RedisCommandExecutor {
 
             // position of stream entry id is (numOfStreams) ahead
             String streamEntryId = streamsArgs.get(i + numOfStreams);
+            streamEntryId = !previousStreamEntryId.isEmpty() ? previousStreamEntryId : streamEntryId;
             String nextStreamEntryId = getNextStreamId(streamEntryId);
             List<RESPStream.RespStreamEntry> streamEntries = stream.getStreamEntriesWithinRange(nextStreamEntryId, "+");
             List<RESPObject> streamEntriesAsRedisArrayList = streamEntries.stream().map(e -> e.convertStreamToRedisArray()).toList();

@@ -401,7 +401,7 @@ public class RedisCommandExecutor {
             entry.setValue(nextValue);
             return new RESPInteger(nextValue).toRedisString();
         } else {
-            return "-ERR value is not an integer or out of range";
+            return "-ERR value is not an integer or out of range\r\n";
         }
     }
 

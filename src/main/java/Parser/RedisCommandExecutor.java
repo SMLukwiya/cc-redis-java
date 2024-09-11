@@ -96,13 +96,16 @@ public class RedisCommandExecutor {
         }
 
         String key = command.get(1);
-        KeyValuePair entry = RedisCache.getCache().stream().filter(item -> item.getKey().equals(key)).toList().get(0);
+        KeyValuePair entry = RedisCache.getCache().stream().filter(item -> item.getKey().equals(key)).findFirst().orElse(null);
         boolean hasExpired = false;
 
+        if (entry == null) {
+            return "$-1\r\n";
+        }
         if (entry.getExpiryTime() != null) {
             hasExpired = entry.getExpiryTime().getTime() < new Date().getTime();
         }
-        return (entry == null || hasExpired) ? "$-1\r\n" : "$" + entry.getValue().toString().length() + "\r\n" + entry.getValue() + "\r\n";
+        return hasExpired ? "$-1\r\n" : "$" + entry.getValue().toString().length() + "\r\n" + entry.getValue() + "\r\n";
     }
 
     private String executeConfig(List<String> command) {

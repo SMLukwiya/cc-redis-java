@@ -20,6 +20,8 @@ public class RedisCommandExecutor {
     BufferedWriter writer;
     Map<String, String> config;
     RedisCache threadCache;
+    boolean isQueuedCommands = false;
+    ArrayList<RESPObject> queuedCommandResults = new ArrayList<>();
 
     public RedisCommandExecutor(Socket socket, BufferedWriter writer, Map<String, String> config, RedisCache threadCache) {
         this.socket = socket;
@@ -43,6 +45,7 @@ public class RedisCommandExecutor {
             threadCache.setQueuedCommands(command);
             return new RESPSimpleString("QUEUED").toRedisString();
         }
+
 
         return switch (Commands.valueOf(commandName)) {
             case Commands.PING -> new RESPSimpleString("PONG").toRedisString();
@@ -87,6 +90,9 @@ public class RedisCommandExecutor {
         }
         RedisCache.setCache(entry);
         RedisReplicas.propagateCommand(command);
+        if (isQueuedCommands) {
+            queuedCommandResults.add(new RESPSimpleString("OK"));
+        }
         return new RESPSimpleString("OK").toRedisString();
     }
 
@@ -98,14 +104,22 @@ public class RedisCommandExecutor {
         String key = command.get(1);
         KeyValuePair entry = RedisCache.getCache().stream().filter(item -> item.getKey().equals(key)).findFirst().orElse(null);
         boolean hasExpired = false;
+        RESPObject res;
 
         if (entry == null) {
-            return "$-1\r\n";
+            res = new RESPNull();
+        } else {
+            if (entry.getExpiryTime() != null) {
+                hasExpired = entry.getExpiryTime().getTime() < new Date().getTime();
+            }
+            res = hasExpired ? new RESPNull() : new RESPBulkString(entry.getValue().toString());
         }
-        if (entry.getExpiryTime() != null) {
-            hasExpired = entry.getExpiryTime().getTime() < new Date().getTime();
+
+        if (isQueuedCommands) {
+            queuedCommandResults.add(res);
         }
-        return hasExpired ? "$-1\r\n" : "$" + entry.getValue().toString().length() + "\r\n" + entry.getValue() + "\r\n";
+
+        return res.toRedisString();
     }
 
     private String executeConfig(List<String> command) {
@@ -125,6 +139,10 @@ public class RedisCommandExecutor {
             String dbFileName = config.get("dbfilename");
             List<RESPObject> response = List.of(new RESPBulkString("dbfilename"), new RESPBulkString(dbFileName));
             return new RESPArray(response).toRedisString();
+        }
+
+        if (isQueuedCommands) {
+            queuedCommandResults.add(new RESPArray(List.of(new RESPBulkString("-1"))));
         }
 
         return new RESPArray(List.of(new RESPBulkString("-1"))).toRedisString();
@@ -173,7 +191,7 @@ public class RedisCommandExecutor {
         String replID = commands.get(1);
         String offset = commands.get(2);
 
-        return "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n";
+        return new RESPSimpleString("FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0").toRedisString(); // "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0 \r\n";
     }
 
     private String executeReplConf(List<String> command) {
@@ -185,7 +203,7 @@ public class RedisCommandExecutor {
         String cacheOffset = Integer.toString(RedisCache.getOffset());
 
         return switch (commandArg) {
-            case "listening-port", "capa" -> "+OK\r\n";
+            case "listening-port", "capa" -> new RESPSimpleString("OK").toRedisString();
             case "GETACK" -> "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + cacheOffset.length() + "\r\n" + cacheOffset + "\r\n";
             case "ACK" -> {
                 int offset = Integer.parseInt(command.get(2));
@@ -199,7 +217,7 @@ public class RedisCommandExecutor {
 
     private String executeWait(List<String> command) {
         if (command.size() < 3) {
-            return "-Err Invalid number of arguments for 'WAIT' command";
+            return new RESPError("Err Invalid number of arguments for 'WAIT' command").toRedisString();
         }
 
         int numOfReplicasNeeded = Integer.parseInt(command.get(1));
@@ -222,7 +240,7 @@ public class RedisCommandExecutor {
 
     private String executeXadd(List<String> commandArgs) {
         if (commandArgs.size() < 5) {
-            return "-Err Invalid number of arguments for 'xadd' command";
+            return new RESPError("Err Invalid number of arguments for 'xadd' command").toRedisString();
         }
 
         String streamKey = commandArgs.get(1);
@@ -268,7 +286,7 @@ public class RedisCommandExecutor {
 
     private String executeXrange(List<String> command) {
         if (command.size() < 4) {
-            return "-Err Invalid number of arguments for 'XRANGE' command";
+            return new RESPError("Err Invalid number of arguments for 'XRANGE' command").toRedisString();
         }
 
         String streamKey = command.get(1);
@@ -282,7 +300,7 @@ public class RedisCommandExecutor {
           .orElse(null);
 
         if (entry == null) {
-            return "-Err no item for key (" + streamKey + ") found";
+            return new RESPError("Err no item for key (\" + streamKey + \") found").toRedisString();
         }
 
         RESPStream value = (RESPStream) entry.getValue();
@@ -293,7 +311,7 @@ public class RedisCommandExecutor {
 
     private String executeXread(List<String> command) {
         if (command.size() < 4) {
-            return "-Err Invalid number of arguments for 'XREAD' command";
+            return new RESPError("Err Invalid number of arguments for 'XREAD' command").toRedisString();
         }
 
         // get stream keys and stream entry Ids
@@ -312,7 +330,7 @@ public class RedisCommandExecutor {
         }
 
         if (streamsArgs.size() % 2 != 0) {
-            return "-Err Invalid number of arguments for 'XREAD' command";
+            return new RESPError("Err Invalid number of arguments for 'XREAD' command").toRedisString();
         }
 
         int numOfStreams = streamsArgs.size() / 2;
@@ -389,7 +407,7 @@ public class RedisCommandExecutor {
 
     private String executeIncr(List<String> command) {
         if (command.size() < 2) {
-            return "-Err Invalid number of argument for 'INCR' command";
+            return new RESPError("Err Invalid number of argument for 'INCR' command").toRedisString();
         }
 
         String key = command.get(1);
@@ -400,20 +418,27 @@ public class RedisCommandExecutor {
           .findFirst()
           .orElse(null);
 
+        RESPObject res;
+
         if (entry == null) {
             KeyValuePair newEntry = new KeyValuePair();
             newEntry.setKey(key);
             newEntry.setValue(1);
             newEntry.setType(ValueType.INTEGER);
             RedisCache.setCache(newEntry);
-            return new RESPInteger(1).toRedisString();
+            res = new RESPInteger(1);
         } else if (entry.getType().equals(ValueType.INTEGER)) {
             int nextValue = Integer.parseInt(entry.getValue().toString()) + 1;
             entry.setValue(nextValue);
-            return new RESPInteger(nextValue).toRedisString();
+            res = new RESPInteger(nextValue);
         } else {
-            return "-ERR value is not an integer or out of range\r\n";
+            res = new RESPError("ERR value is not an integer or out of range");
         }
+
+        if (isQueuedCommands) {
+            queuedCommandResults.add(res);
+        }
+        return res.toRedisString();
     }
 
     private String executeMulti(List<String> command) {
@@ -423,10 +448,9 @@ public class RedisCommandExecutor {
 
     private String executeExec(List<String> command) throws IOException {
         boolean multiWasSet = threadCache.getQueueMultiCommands();
-        StringBuilder res = new StringBuilder();
 
-        if (!multiWasSet) { // exec returns an array of command responses
-            return res.append("-ERR EXEC without MULTI\r\n").append(",").append("EXEC").toString();
+        if (!multiWasSet) {
+            return new RESPError("ERR EXEC without MULTI").toRedisString();
         }
 
         threadCache.setQueueMultiCommands(false);
@@ -435,15 +459,13 @@ public class RedisCommandExecutor {
             return "*0\r\n";
         }
 
-        ArrayList<String> returnValues = new ArrayList<>();
+        isQueuedCommands = true;
         for (RESPArray c : queuedCommands) {
-            returnValues.add(execute(c));
+            execute(c);
         }
-        for (String c : returnValues) {
-            res.append(c).append(",");
-        }
-        res.append("EXEC");
-        return res.toString();
+        isQueuedCommands = false;
+
+        return new RESPArray(queuedCommandResults).toRedisString();
     }
 
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {

@@ -49,15 +49,18 @@ public class ClientConnHandler implements Runnable {
                     if (argument == null) {
                         continue;
                     }
-                    if (argument.contains("EXEC")) {
-                        List<String> res = Arrays.stream(argument.split(",")).toList();
-                        List<String> returnedValues = res.subList(0, res.size() - 1); // remove "EXEC"
-                        for (String r : returnedValues) {
-                            writer.write(r);
-                        }
-                    } else {
-                        writer.write(argument);
-                    }
+//                    if (argument.contains("EXEC")) {
+//                        List<String> res = Arrays.stream(argument.split(",")).toList();
+//                        List<String> returnedValues = res.subList(0, res.size() - 1); // remove "EXEC"
+//                        for (String r : returnedValues) {
+//                            writer.write(r);
+//                            writer.flush();
+//                        }
+//                    } else {
+//                        writer.write(argument);
+//                    }
+
+                    writer.write(argument);
 
                     if (argument.contains("FULLRESYNC")) {
                         sendEmptyRDBFile(writer, outputStream);

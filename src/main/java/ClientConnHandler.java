@@ -49,8 +49,8 @@ public class ClientConnHandler implements Runnable {
                     }
                     if (argument.contains("EXEC")) {
                         List<String> res = Arrays.stream(argument.split(",")).toList();
-                        res.removeLast(); // remove "EXEC"
-                        for (String r : res) {
+                        List<String> returnedValues = res.subList(0, res.size() - 1); // remove "EXEC"
+                        for (String r : returnedValues) {
                             writer.write(r);
                         }
                     } else {

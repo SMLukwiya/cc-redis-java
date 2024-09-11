@@ -422,8 +422,10 @@ public class RedisCommandExecutor {
 
     private String executeExec(List<String> command) throws IOException {
         boolean multiWasSet = nonSharedCache.getQueueMultiCommands();
-        if (!multiWasSet) {
-            return "-ERR EXEC without MULTI\r\n";
+        StringBuilder res = new StringBuilder();
+
+        if (!multiWasSet) { // exec returns an array of command responses
+            return res.append("-ERR EXEC without MULTI\r\n").append(",").append("EXEC").toString();
         }
 
         nonSharedCache.setQueueMultiCommands(false);
@@ -436,7 +438,6 @@ public class RedisCommandExecutor {
         for (RESPArray c : queuedCommands) {
             returnValues.add(execute(c));
         }
-        StringBuilder res = new StringBuilder();
         for (String c : returnValues) {
             res.append(c).append(",");
         }

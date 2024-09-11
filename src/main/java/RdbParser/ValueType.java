@@ -12,7 +12,8 @@ public enum ValueType {
     SORTED_SET_IN_ZIPLIST(12, ""),
     HASHMAP_IN_ZIPLIST(13, ""),
     LIST_IN_QUICKLIST(14, ""),
-    STREAM(15, "stream");
+    STREAM(15, "stream"),
+    INTEGER(16, "integer");
 
     private final int type;
     private final String typeName;

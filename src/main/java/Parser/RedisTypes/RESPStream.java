@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 
 public class RESPStream {
     private List<RespStreamEntry> entries = new ArrayList<>();
+    String previousStreamEntryId = "";
 
     public RESPStream() {}
 
@@ -21,7 +22,17 @@ public class RESPStream {
     }
 
     public void addStreamEntry(RespStreamEntry streamEntry) {
+        RespStreamEntry lastStreamEntry = getLastStreamEntry();
+        if (lastStreamEntry != null) {
+            previousStreamEntryId = lastStreamEntry.getId();
+        } else {
+            previousStreamEntryId = streamEntry.getId();
+        }
         entries.add(streamEntry);
+    }
+
+    public String getPreviousStreamEntryId() {
+        return previousStreamEntryId;
     }
 
     public List<RespStreamEntry> getStreamEntriesWithinRange(String startId, String endId) {
@@ -139,6 +150,22 @@ public class RESPStream {
             sequenceNoPart = millisecondsPart > lastEntryMillisecondsPart ? 0L : lastEntrySequenceNoPart + 1;
         }
         return  id.append(millisecondsPart).append("-").append(sequenceNoPart).toString();
+    }
+
+    public String getNextStreamId(String streamEntryId) {
+        String[] streamEntryIdParts = streamEntryId.split("-");
+        boolean idSequenceNoPartExists = streamEntryIdParts.length > 1;
+        String result;
+
+        // Exclude current stream entry adding one to it
+        if (idSequenceNoPartExists) {
+            long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[1]) + 1;
+            result = streamEntryIdParts[0] + "-" + excludeCurrentStreamId;
+        } else {
+            long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[0]) + 1;
+            result = Long.toString(excludeCurrentStreamId);
+        }
+        return result;
     }
 
     public class RespStreamEntry {

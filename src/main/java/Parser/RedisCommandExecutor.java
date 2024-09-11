@@ -53,6 +53,7 @@ public class RedisCommandExecutor {
             case Commands.XADD -> executeXadd(commandArgs);
             case Commands.XRANGE -> executeXrange(commandArgs);
             case Commands.XREAD -> executeXread(commandArgs);
+            case Commands.INCR -> executeIncr(commandArgs);
             default -> "-ERR Unknown command\r\n";
         };
     }
@@ -69,7 +70,7 @@ public class RedisCommandExecutor {
         KeyValuePair entry = new KeyValuePair();
         entry.setValue(value);
         entry.setKey(key);
-        entry.setType(ValueType.STRING);
+        entry.setType(entry.isNumerical() ? ValueType.INTEGER : ValueType.STRING);
 
         if (hasExtraArgs) {
             String expiry = command.get(4);
@@ -334,15 +335,11 @@ public class RedisCommandExecutor {
                 // position of stream entry id is (numOfStreams) ahead
                 String streamEntryId = streamsArgs.get(i + numOfStreams);
                 // get last entry for "$" Id
-                if (streamEntryId.equals("$") && previousStreamEntryId.isEmpty()) {
-                    RESPStream.RespStreamEntry previousEntryStream = stream.getLastStreamEntry();
-                    if (previousEntryStream != null) {
-                        previousStreamEntryId = previousEntryStream.getId();
-                    }
+                if (streamEntryId.equals("$")) {
+                    streamEntryId = stream.getPreviousStreamEntryId();
                 }
 
-                streamEntryId = !previousStreamEntryId.isEmpty() ? previousStreamEntryId : streamEntryId;
-                String nextStreamEntryId = getNextStreamId(streamEntryId);
+                String nextStreamEntryId = stream.getNextStreamId(streamEntryId);
                 List<RESPStream.RespStreamEntry> streamEntries = stream.getStreamEntriesWithinRange(nextStreamEntryId, "+");
                 if (!streamEntries.isEmpty()) {
                     newDataAvailable = true;
@@ -364,8 +361,11 @@ public class RedisCommandExecutor {
 
             // position of stream entry id is (numOfStreams) ahead
             String streamEntryId = streamsArgs.get(i + numOfStreams);
-            streamEntryId = !previousStreamEntryId.isEmpty() ? previousStreamEntryId : streamEntryId;
-            String nextStreamEntryId = getNextStreamId(streamEntryId);
+            if (streamEntryId.equals("$")) {
+                streamEntryId = stream.getPreviousStreamEntryId();
+            }
+
+            String nextStreamEntryId = stream.getNextStreamId(streamEntryId);
             List<RESPStream.RespStreamEntry> streamEntries = stream.getStreamEntriesWithinRange(nextStreamEntryId, "+");
             List<RESPObject> streamEntriesAsRedisArrayList = streamEntries.stream().map(e -> e.convertStreamToRedisArray()).toList();
             RESPObject streamEntriesCombined = new RESPArray(streamEntriesAsRedisArrayList);
@@ -376,20 +376,32 @@ public class RedisCommandExecutor {
         return new RESPArray(streamsWithKeysRedisArray).toRedisString();
     }
 
-    private String getNextStreamId(String streamEntryId) {
-        String[] streamEntryIdParts = streamEntryId.split("-");
-        boolean idSequenceNoPartExists = streamEntryIdParts.length > 1;
-        String result;
-
-        // current stream entry is excluded by simply adding one to the current stream id
-        if (idSequenceNoPartExists) {
-            long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[1]) + 1;
-            result = streamEntryIdParts[0] + "-" + excludeCurrentStreamId;
-        } else {
-            long excludeCurrentStreamId = Long.parseLong(streamEntryIdParts[0]) + 1;
-            result = Long.toString(excludeCurrentStreamId);
+    private String executeIncr(List<String> command) {
+        if (command.size() < 2) {
+            return "-Err Invalid number of argument for 'INCR' command";
         }
-        return result;
+
+        String key = command.get(1);
+
+        KeyValuePair entry = RedisCache.getCache()
+          .stream()
+          .filter(e -> e.getKey().equals(key))
+          .findFirst()
+          .orElse(null);
+
+        if (entry == null) {
+            KeyValuePair newEntry = new KeyValuePair();
+            newEntry.setKey(key);
+            newEntry.setValue(1);
+            newEntry.setType(ValueType.INTEGER);
+            return new RESPInteger(1).toRedisString();
+        } else if (entry.getType().equals(ValueType.INTEGER)) {
+            int nextValue = Integer.parseInt(entry.getValue().toString()) + 1;
+            entry.setValue(nextValue);
+            return new RESPInteger(nextValue).toRedisString();
+        } else {
+            return "-ERR value is not an integer or out of range";
+        }
     }
 
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {

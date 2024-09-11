@@ -1,13 +1,18 @@
 package store;
 
+import Parser.RedisTypes.RESPArray;
 import RdbParser.KeyValuePair;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class RedisCache {
     private volatile static ArrayList<KeyValuePair> cache = new ArrayList<>();
+
+    private ArrayList<RESPArray> queuedCommands = new ArrayList<>();
     private volatile static int offset = 0;
     private volatile static int currOffset = 0;
+    private boolean queueMultiCommands = false;
 
     public RedisCache() {}
 
@@ -30,4 +35,20 @@ public class RedisCache {
     }
 
     public static int getOffset() { return currOffset; }
+
+    public void setQueueMultiCommands(boolean value) {
+        this.queueMultiCommands = value;
+    }
+
+    public boolean getQueueMultiCommands() {
+        return this.queueMultiCommands;
+    }
+
+    public void setQueuedCommands(RESPArray command) {
+        this.queuedCommands.add(command);
+    }
+
+    public List<RESPArray> getQueuedCommands() {
+        return this.queuedCommands;
+    }
 }

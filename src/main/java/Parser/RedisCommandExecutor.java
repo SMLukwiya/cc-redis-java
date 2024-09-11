@@ -21,11 +21,13 @@ public class RedisCommandExecutor {
     Socket socket;
     BufferedWriter writer;
     Map<String, String> config;
+    RedisCache nonSharedCache;
 
     public RedisCommandExecutor(Socket socket, BufferedWriter writer, Map<String, String> config) {
         this.socket = socket;
         this.writer = writer;
         this.config = config;
+        this.nonSharedCache = new RedisCache();
     }
 
     public String execute(RESPArray command) throws IOException {
@@ -33,6 +35,12 @@ public class RedisCommandExecutor {
         if (items.isEmpty()) {
             return "-Err Empty command\r\n";
         }
+
+        if (nonSharedCache.getQueueMultiCommands()) {
+            nonSharedCache.setQueuedCommands(command);
+            return new RESPSimpleString("QUEUED").toRedisString();
+        }
+
         List<String> commandArgs = extractCommandsArgsToString(items);
 
         String redisCommand = commandArgs.getFirst();
@@ -54,6 +62,8 @@ public class RedisCommandExecutor {
             case Commands.XRANGE -> executeXrange(commandArgs);
             case Commands.XREAD -> executeXread(commandArgs);
             case Commands.INCR -> executeIncr(commandArgs);
+            case Commands.MULTI -> executeMulti(commandArgs);
+            case Commands.EXEC -> executeExec(commandArgs);
             default -> "-ERR Unknown command\r\n";
         };
     }
@@ -403,6 +413,35 @@ public class RedisCommandExecutor {
         } else {
             return "-ERR value is not an integer or out of range\r\n";
         }
+    }
+
+    private String executeMulti(List<String> command) {
+        nonSharedCache.setQueueMultiCommands(true);
+        return new RESPSimpleString("OK").toRedisString();
+    }
+
+    private String executeExec(List<String> command) throws IOException {
+        boolean multiWasSet = nonSharedCache.getQueueMultiCommands();
+        if (!multiWasSet) {
+            return "-ERR EXEC without MULTI\r\n";
+        }
+
+        nonSharedCache.setQueueMultiCommands(false);
+        List<RESPArray> queuedCommands = nonSharedCache.getQueuedCommands();
+        if (queuedCommands.isEmpty()) {
+            return "*0\r\n";
+        }
+
+        ArrayList<String> returnValues = new ArrayList<>();
+        for (RESPArray c : queuedCommands) {
+            returnValues.add(execute(c));
+        }
+        StringBuilder res = new StringBuilder();
+        for (String c : returnValues) {
+            res.append(c).append(",");
+        }
+        res.append("EXEC");
+        return res.toString();
     }
 
     private List<String> extractCommandsArgsToString(List<RESPObject> command) {

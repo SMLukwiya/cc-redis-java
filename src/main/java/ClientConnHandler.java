@@ -7,7 +7,9 @@ import store.RedisReplicas;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 
 public class ClientConnHandler implements Runnable {
@@ -45,7 +47,15 @@ public class ClientConnHandler implements Runnable {
                     if (argument == null) {
                         continue;
                     }
-                    writer.write(argument);
+                    if (argument.contains("EXEC")) {
+                        List<String> res = Arrays.stream(argument.split(",")).toList();
+                        res.removeLast(); // remove "EXEC"
+                        for (String r : res) {
+                            writer.write(r);
+                        }
+                    } else {
+                        writer.write(argument);
+                    }
 
                     if (argument.contains("FULLRESYNC")) {
                         sendEmptyRDBFile(writer, outputStream);

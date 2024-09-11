@@ -15,5 +15,7 @@ public enum Commands {
     XADD,
     XRANGE,
     XREAD,
-    INCR
+    INCR,
+    MULTI,
+    EXEC
 }

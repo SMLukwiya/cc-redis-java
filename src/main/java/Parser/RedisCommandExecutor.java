@@ -394,6 +394,7 @@ public class RedisCommandExecutor {
             newEntry.setKey(key);
             newEntry.setValue(1);
             newEntry.setType(ValueType.INTEGER);
+            RedisCache.setCache(newEntry);
             return new RESPInteger(1).toRedisString();
         } else if (entry.getType().equals(ValueType.INTEGER)) {
             int nextValue = Integer.parseInt(entry.getValue().toString()) + 1;

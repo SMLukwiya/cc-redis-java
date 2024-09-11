@@ -17,11 +17,13 @@ public class ClientConnHandler implements Runnable {
     private final Socket socket;
     Map<String, String> config;
     boolean readAfterHandShake = false;
+    RedisCache threadCache;
 
     public ClientConnHandler(Socket socket, Map<String, String> config, boolean readAfterHandShake) {
         this.socket = socket;
         this.config = config;
         this.readAfterHandShake = readAfterHandShake;
+        this.threadCache = new RedisCache();
 
         if (readAfterHandShake) {
             try {
@@ -43,7 +45,7 @@ public class ClientConnHandler implements Runnable {
                 OutputStream outputStream = socket.getOutputStream();
 
                 if (command instanceof RESPArray) {
-                    String argument = new RedisCommandExecutor(socket, writer, config).execute((RESPArray) command);
+                    String argument = new RedisCommandExecutor(socket, writer, config, threadCache).execute((RESPArray) command);
                     if (argument == null) {
                         continue;
                     }

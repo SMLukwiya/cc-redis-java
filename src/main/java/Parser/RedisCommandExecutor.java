@@ -14,20 +14,18 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class RedisCommandExecutor {
     Socket socket;
     BufferedWriter writer;
     Map<String, String> config;
-    RedisCache nonSharedCache;
+    RedisCache threadCache;
 
-    public RedisCommandExecutor(Socket socket, BufferedWriter writer, Map<String, String> config) {
+    public RedisCommandExecutor(Socket socket, BufferedWriter writer, Map<String, String> config, RedisCache threadCache) {
         this.socket = socket;
         this.writer = writer;
         this.config = config;
-        this.nonSharedCache = new RedisCache();
+        this.threadCache = threadCache;
     }
 
     public String execute(RESPArray command) throws IOException {
@@ -36,15 +34,15 @@ public class RedisCommandExecutor {
             return "-Err Empty command\r\n";
         }
 
-        if (nonSharedCache.getQueueMultiCommands()) {
-            nonSharedCache.setQueuedCommands(command);
-            return new RESPSimpleString("QUEUED").toRedisString();
-        }
-
         List<String> commandArgs = extractCommandsArgsToString(items);
 
         String redisCommand = commandArgs.getFirst();
         String commandName = redisCommand.toUpperCase();
+
+        if (threadCache.getQueueMultiCommands() && !commandName.equals("EXEC")) {
+            threadCache.setQueuedCommands(command);
+            return new RESPSimpleString("QUEUED").toRedisString();
+        }
 
         return switch (Commands.valueOf(commandName)) {
             case Commands.PING -> new RESPSimpleString("PONG").toRedisString();
@@ -416,20 +414,20 @@ public class RedisCommandExecutor {
     }
 
     private String executeMulti(List<String> command) {
-        nonSharedCache.setQueueMultiCommands(true);
+        threadCache.setQueueMultiCommands(true);
         return new RESPSimpleString("OK").toRedisString();
     }
 
     private String executeExec(List<String> command) throws IOException {
-        boolean multiWasSet = nonSharedCache.getQueueMultiCommands();
+        boolean multiWasSet = threadCache.getQueueMultiCommands();
         StringBuilder res = new StringBuilder();
 
         if (!multiWasSet) { // exec returns an array of command responses
             return res.append("-ERR EXEC without MULTI\r\n").append(",").append("EXEC").toString();
         }
 
-        nonSharedCache.setQueueMultiCommands(false);
-        List<RESPArray> queuedCommands = nonSharedCache.getQueuedCommands();
+        threadCache.setQueueMultiCommands(false);
+        List<RESPArray> queuedCommands = threadCache.getQueuedCommands();
         if (queuedCommands.isEmpty()) {
             return "*0\r\n";
         }

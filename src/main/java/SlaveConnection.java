@@ -34,7 +34,7 @@ public class SlaveConnection implements Runnable {
                 }
                 RedisCache.setCurrOffset();
                 RedisCache.setOffset(command.toRedisString().length());
-                String response = new RedisCommandExecutor(slave, writer, config).execute((RESPArray) command);
+                String response = new RedisCommandExecutor(slave, writer, config, new RedisCache()).execute((RESPArray) command);
                 if (response.contains("ACK")) {
                     writer.write(response);
                     writer.flush();

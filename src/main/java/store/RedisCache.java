@@ -51,4 +51,6 @@ public class RedisCache {
     public List<RESPArray> getQueuedCommands() {
         return this.queuedCommands;
     }
+
+    public void clearQueuedCommands() { this.queuedCommands.clear(); }
 }

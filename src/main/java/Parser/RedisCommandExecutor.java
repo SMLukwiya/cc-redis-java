@@ -63,9 +63,9 @@ public class RedisCommandExecutor {
             case Commands.XRANGE -> executeXrange(commandArgs);
             case Commands.XREAD -> executeXread(commandArgs);
             case Commands.INCR -> executeIncr(commandArgs);
-            case Commands.MULTI -> executeMulti(commandArgs);
-            case Commands.EXEC -> executeExec(commandArgs);
-            case Commands.DISCARD -> executeDiscard(commandArgs);
+            case Commands.MULTI -> executeMulti();
+            case Commands.EXEC -> executeExec();
+            case Commands.DISCARD -> executeDiscard();
             default -> "-ERR Unknown command\r\n";
         };
     }
@@ -442,12 +442,12 @@ public class RedisCommandExecutor {
         return res.toRedisString();
     }
 
-    private String executeMulti(List<String> command) {
+    private String executeMulti() {
         threadCache.setQueueMultiCommands(true);
         return new RESPSimpleString("OK").toRedisString();
     }
 
-    private String executeExec(List<String> command) throws IOException {
+    private String executeExec() throws IOException {
         boolean multiWasSet = threadCache.getQueueMultiCommands();
 
         if (!multiWasSet) {
@@ -469,7 +469,7 @@ public class RedisCommandExecutor {
         return new RESPArray(queuedCommandResults).toRedisString();
     }
 
-    private String executeDiscard(List<String> command) {
+    private String executeDiscard() {
         if (!threadCache.getQueueMultiCommands()) {
             return new RESPError("ERR DISCARD without MULTI").toRedisString();
         }
